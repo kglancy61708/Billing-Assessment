@@ -147,6 +147,10 @@ app.get('/api/diagnose', async (req, res) => {
       q: `SELECT id, companyname FROM customer WHERE rownum <= 1`,
     },
     {
+      name: 'Auth & basic customer query (entity)',
+      q: `SELECT id, companyname FROM entity WHERE rownum <= 1`,
+    },
+    {
       name: 'customeraddressbook sublist',
       q: `SELECT ca.id, ca.entity, ca.defaultbilling, ca.defaultshipping, ca.addressbookaddress
           FROM customeraddressbook ca WHERE rownum <= 1`,
@@ -157,22 +161,16 @@ app.get('/api/diagnose', async (req, res) => {
           FROM entityaddress a WHERE rownum <= 1`,
     },
     {
-      name: 'Full Rule 6 join (1 row)',
-      q: `SELECT c.id, c.companyname, a.addressee, a.addr1, a.city, a.state, a.zip
-          FROM customer c
-          JOIN customeraddressbook ca ON ca.entity = c.id
-          JOIN entityaddress a ON a.nkey = ca.addressbookaddress
-          WHERE c.isinactive = 'F'
-            AND (ca.defaultbilling = 'T' OR ca.defaultshipping = 'T')
-            AND rownum <= 1`,
-    },
-    {
       name: 'custentity_po_required field',
       q: `SELECT id, companyname, custentity_po_required FROM customer WHERE rownum <= 1`,
     },
     {
       name: 'custentity264 and custentity310 fields',
       q: `SELECT id, custentity264, custentity310 FROM customer WHERE rownum <= 1`,
+    },
+    {
+      name: 'transaction table',
+      q: `SELECT id, type, entity FROM transaction WHERE rownum <= 1`,
     },
   ];
 
