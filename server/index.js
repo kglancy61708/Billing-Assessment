@@ -142,36 +142,14 @@ app.get('/api/diagnose', async (req, res) => {
   const results = [];
 
   const tests = [
-    {
-      name: 'Auth & basic customer query',
-      q: `SELECT id, companyname FROM customer WHERE rownum <= 1`,
-    },
-    {
-      name: 'Auth & basic customer query (entity)',
-      q: `SELECT id, companyname FROM entity WHERE rownum <= 1`,
-    },
-    {
-      name: 'customeraddressbook sublist',
-      q: `SELECT ca.id, ca.entity, ca.defaultbilling, ca.defaultshipping, ca.addressbookaddress
-          FROM customeraddressbook ca WHERE rownum <= 1`,
-    },
-    {
-      name: 'entityaddress join',
-      q: `SELECT a.nkey, a.addressee, a.addr1, a.city, a.state, a.zip
-          FROM entityaddress a WHERE rownum <= 1`,
-    },
-    {
-      name: 'custentity_po_required field',
-      q: `SELECT id, companyname, custentity_po_required FROM customer WHERE rownum <= 1`,
-    },
-    {
-      name: 'custentity264 and custentity310 fields',
-      q: `SELECT id, custentity264, custentity310 FROM customer WHERE rownum <= 1`,
-    },
-    {
-      name: 'transaction table',
-      q: `SELECT id, type, entity FROM transaction WHERE rownum <= 1`,
-    },
+    { name: 'transaction table', q: `SELECT id, type, entity FROM transaction WHERE rownum <= 1` },
+    { name: 'customer', q: `SELECT id FROM customer WHERE rownum <= 1` },
+    { name: 'contact', q: `SELECT id FROM contact WHERE rownum <= 1` },
+    { name: 'vendor', q: `SELECT id FROM vendor WHERE rownum <= 1` },
+    { name: 'job (project)', q: `SELECT id FROM job WHERE rownum <= 1` },
+    { name: 'account', q: `SELECT id FROM account WHERE rownum <= 1` },
+    { name: 'ns_customer (prefixed)', q: `SELECT id FROM ns_customer WHERE rownum <= 1` },
+    { name: 'custjob', q: `SELECT id FROM custjob WHERE rownum <= 1` },
   ];
 
   for (const test of tests) {
