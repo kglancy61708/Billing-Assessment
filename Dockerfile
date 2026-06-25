@@ -18,8 +18,6 @@ COPY server/ ./server/
 # Copy built React client
 COPY --from=client-builder /app/client/dist ./client/dist
 
-# Persist SQLite data
-VOLUME /app/data
 ENV DATA_DIR=/app/data
 ENV PORT=3001
 
