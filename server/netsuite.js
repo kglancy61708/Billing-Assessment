@@ -30,8 +30,11 @@ async function suiteQL(query, limit = 1000, offset = 0) {
   const oauth = getOAuth();
   const token = { key: NS_TOKEN_ID, secret: NS_TOKEN_SECRET };
 
-  const authHeader = oauth.toHeader(
-    oauth.authorize({ url, method: 'POST' }, token)
+  const authData = oauth.authorize({ url, method: 'POST' }, token);
+  const authHeader = oauth.toHeader(authData);
+  // NetSuite requires the realm (account ID uppercase) in the Authorization header
+  authHeader.Authorization = authHeader.Authorization.replace(
+    'OAuth ', `OAuth realm="${NS_ACCOUNT_ID.toUpperCase()}",`
   );
 
   const res = await fetch(url, {
@@ -74,8 +77,10 @@ async function updateCustomer(customerId, fields) {
   const oauth = getOAuth();
   const token = { key: NS_TOKEN_ID, secret: NS_TOKEN_SECRET };
 
-  const authHeader = oauth.toHeader(
-    oauth.authorize({ url, method: 'PATCH' }, token)
+  const authData = oauth.authorize({ url, method: 'PATCH' }, token);
+  const authHeader = oauth.toHeader(authData);
+  authHeader.Authorization = authHeader.Authorization.replace(
+    'OAuth ', `OAuth realm="${NS_ACCOUNT_ID.toUpperCase()}",`
   );
 
   const res = await fetch(url, {
