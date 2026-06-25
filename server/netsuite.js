@@ -96,7 +96,7 @@ async function updateCustomer(customerId, fields) {
 }
 
 function getRecordUrl(customerId) {
-  const acct = NS_ACCOUNT_ID;
+  const acct = NS_ACCOUNT_ID.replace(/_/g, '-').toLowerCase();
   return `https://${acct}.app.netsuite.com/app/common/entity/custjob.nl?id=${customerId}`;
 }
 
