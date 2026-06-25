@@ -120,6 +120,22 @@ app.patch('/api/flags/:customerId/:ruleId', (req, res) => {
   res.json({ success: true, customerId, ruleId, status });
 });
 
+// GET /api/credentials — shows masked credential values to verify Railway vars are set
+app.get('/api/credentials', (req, res) => {
+  const mask = (val) => {
+    if (!val) return '(not set)';
+    if (val.length <= 6) return '***';
+    return val.slice(0, 3) + '***' + val.slice(-3);
+  };
+  res.json({
+    NS_ACCOUNT_ID:      process.env.NS_ACCOUNT_ID     || '(not set)',
+    NS_CONSUMER_KEY:    mask(process.env.NS_CONSUMER_KEY),
+    NS_CONSUMER_SECRET: mask(process.env.NS_CONSUMER_SECRET),
+    NS_TOKEN_ID:        mask(process.env.NS_TOKEN_ID),
+    NS_TOKEN_SECRET:    mask(process.env.NS_TOKEN_SECRET),
+  });
+});
+
 // GET /api/diagnose — verifies NetSuite connectivity and SuiteQL table names
 app.get('/api/diagnose', async (req, res) => {
   const { suiteQL } = require('./netsuite');
