@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "billing-preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "-p", "4444", "client"],
+      "port": 4444
+    }
+  ]
+}

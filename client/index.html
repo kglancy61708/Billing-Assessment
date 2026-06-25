@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Billing Assessment</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f4f6f9; color: #1a2332; font-size: 14px; line-height: 1.5;
+    }
+    button { cursor: pointer; font: inherit; border: none; background: none; }
+    a { color: #1a56db; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Header */
+    .header {
+      background: #fff; border-bottom: 1px solid #e2e6ea;
+      padding: 20px 28px 16px; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+    .header-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
+    h1 { font-size:22px; font-weight:700; }
+    .subtitle { font-size:12px; color:#6b7a8d; margin-top:2px; }
+    .btn-scan {
+      background:#1a56db; color:#fff; padding:8px 18px;
+      border-radius:6px; font-weight:600; font-size:13px;
+    }
+    .btn-scan:hover { background:#1649c0; }
+    .stat-row { display:flex; gap:28px; margin-bottom:14px; }
+    .stat-val { font-size:28px; font-weight:700; line-height:1; }
+    .stat-label { font-size:12px; color:#6b7a8d; margin-top:2px; }
+    .rule-row { display:flex; flex-wrap:wrap; gap:8px; }
+    .rule-pill {
+      display:flex; align-items:center; gap:6px;
+      background:#f3f4f6; border-radius:20px; padding:3px 10px 3px 8px; font-size:12px;
+    }
+    .rule-num { font-weight:700; color:#374151; }
+    .rule-count {
+      background:#e5e7eb; border-radius:10px; padding:0 6px;
+      font-weight:700; color:#111827;
+    }
+    .rule-lbl { color:#6b7280; }
+
+    /* Toolbar */
+    .toolbar {
+      display:flex; align-items:center; gap:10px; padding:16px 28px 12px;
+      flex-wrap:wrap;
+    }
+    .search, .select-filter {
+      border:1px solid #d1d5db; border-radius:6px; padding:7px 12px;
+      font-size:13px; outline:none; background:#fff;
+    }
+    .search { min-width:220px; }
+    .result-count { margin-left:auto; font-size:13px; color:#6b7280; }
+
+    /* Flag cards */
+    .flags { padding:0 28px 28px; }
+    .card {
+      background:#fff; border-radius:8px;
+      box-shadow:0 1px 3px rgba(0,0,0,.07);
+      overflow:hidden; margin-bottom:8px;
+      border-left:4px solid #ccc;
+    }
+    .card-header {
+      display:flex; justify-content:space-between; align-items:center;
+      padding:12px 16px; cursor:pointer; user-select:none;
+    }
+    .card-header:hover { background:#fafafa; }
+    .card-left { display:flex; align-items:center; gap:10px; }
+    .chevron { font-size:16px; color:#9ca3af; width:16px; }
+    .company { font-weight:600; font-size:14px; }
+    .meta { font-size:12px; color:#6b7a8d; margin-top:2px; }
+    .parent-tag {
+      background:#e5e7eb; border-radius:4px; padding:1px 6px;
+      margin-left:8px; font-size:11px;
+    }
+    .card-right { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+    .rule-tag {
+      background:#e0e7ff; color:#3730a3; border-radius:4px;
+      padding:2px 8px; font-size:11px; font-weight:700;
+    }
+    .status-badge { border-radius:12px; padding:2px 10px; font-size:12px; font-weight:600; }
+    .status-open    { background:#fef3c7; color:#92400e; }
+    .status-reviewed  { background:#d1fae5; color:#065f46; }
+    .status-dismissed { background:#f3f4f6; color:#6b7280; }
+    .ns-link { font-size:12px; font-weight:500; white-space:nowrap; }
+
+    /* Expanded body */
+    .card-body { border-top:1px solid #f3f4f6; padding:14px 20px 16px; display:none; }
+    .card-body.open { display:block; }
+    .rule-label { font-weight:700; font-size:13px; margin-bottom:4px; color:#374151; }
+    .detail { font-size:13px; color:#4b5563; margin-bottom:12px; }
+    .field-box {
+      background:#f9fafb; border-radius:6px; padding:10px 12px;
+      margin-bottom:14px; font-size:13px;
+    }
+    .field-row { display:flex; gap:8px; margin-bottom:3px; }
+    .field-key { color:#6b7280; min-width:140px; }
+    .field-val { color:#111827; font-family:monospace; }
+    .field-miss { color:#dc2626; font-weight:500; }
+    .review-form { border-top:1px solid #f3f4f6; padding-top:12px; }
+    .form-row { display:flex; flex-direction:column; gap:4px; margin-bottom:10px; }
+    .form-label { font-size:12px; font-weight:600; color:#374151; }
+    .form-input {
+      border:1px solid #d1d5db; border-radius:6px; padding:6px 10px;
+      font-size:13px; outline:none; max-width:300px; font:inherit;
+    }
+    .form-textarea {
+      border:1px solid #d1d5db; border-radius:6px; padding:6px 10px;
+      font-size:13px; resize:vertical; outline:none; font:inherit; width:100%;
+    }
+    .actions { display:flex; gap:8px; margin-top:4px; }
+    .action-btn { padding:6px 14px; border-radius:6px; font-weight:600; font-size:13px; }
+    .btn-reviewed { background:#d1fae5; color:#057a55; }
+    .btn-dismiss  { background:#f3f4f6; color:#6b7280; }
+    .btn-reopen   { background:#dbeafe; color:#1a56db; }
+    .reviewed-info { font-size:12px; color:#6b7280; margin-bottom:8px; }
+    .saved-toast {
+      display:inline-block; background:#d1fae5; color:#065f46;
+      border-radius:6px; padding:3px 10px; font-size:12px; font-weight:600;
+      margin-left:10px; opacity:0; transition:opacity 0.3s;
+    }
+    .saved-toast.show { opacity:1; }
+
+    /* Tables */
+    table { width:100%; border-collapse:collapse; margin-top:6px; }
+    th { text-align:left; font-weight:600; color:#374151; padding:4px 8px;
+         border-bottom:1px solid #e5e7eb; font-size:12px; }
+    td { padding:4px 8px; border-bottom:1px solid #f3f4f6;
+         color:#374151; font-family:monospace; font-size:12px; }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <!-- Header injected by JS -->
+</div>
+
+<script>
+// ── Mock data ──────────────────────────────────────────────────────────────
+const MOCK_FLAGS = [
+  {
+    customerId: '10482', companyName: 'Acme Corp – West Division', parentId: '10001',
+    ruleId: 1, ruleLabel: 'Missing Online Invoice Service (vs. siblings)',
+    detail: 'One or more sibling sub-accounts have Customer has Online Invoice Service (custentity310) checked, but this account does not.',
+    status: 'open', note: null, reviewedBy: null, reviewedAt: null,
+    netsuiteUrl: '#', fields: { custentity310: 'F' },
+  },
+  {
+    customerId: '10391', companyName: 'Riverfront Systems LLC', parentId: null,
+    ruleId: 2, ruleLabel: 'No Invoice Delivery Method Set',
+    detail: 'None of Print Transactions, Invoices to Email, or Online Invoice Service are enabled.',
+    status: 'open', note: null, reviewedBy: null, reviewedAt: null,
+    netsuiteUrl: '#', fields: { printtransactions: 'F', custentity264: 'F', custentity310: 'F' },
+  },
+  {
+    customerId: '10204', companyName: 'Blue Ridge Water Partners', parentId: null,
+    ruleId: 3, ruleLabel: 'Invoices to Email — No Email Address',
+    detail: '"Invoices to Email" (custentity264) is enabled but the Email field is empty.',
+    status: 'reviewed', note: 'Confirmed with account manager — email being added by EOD.', reviewedBy: 'Sarah K.',
+    reviewedAt: '2026-06-24T15:22:00Z',
+    netsuiteUrl: '#', fields: { email: '' },
+  },
+  {
+    customerId: '10519', companyName: 'Desert Springs Municipal – East', parentId: '10500',
+    ruleId: 4, ruleLabel: 'Email Domain Mismatch vs. Siblings',
+    detail: 'Email domain "@gmail.com" differs from the majority domain "@desertsprings.gov" used by sibling sub-accounts under the same parent.',
+    status: 'open', note: null, reviewedBy: null, reviewedAt: null,
+    netsuiteUrl: '#', fields: { email: 'billing@gmail.com', expectedDomain: 'desertsprings.gov' },
+  },
+  {
+    customerId: '10877', companyName: 'Summit Valley Utilities', parentId: null,
+    ruleId: 5, ruleLabel: 'PO Required — Invoices Missing PO#',
+    detail: 'Customer requires a PO but 3 invoice(s) have no PO# (otherrefnum).',
+    status: 'open', note: null, reviewedBy: null, reviewedAt: null,
+    netsuiteUrl: '#',
+    fields: {
+      invoiceCount: 3,
+      invoices: [
+        { transactionId: '88201', tranId: 'INV-4421', tranDate: '2026-06-10' },
+        { transactionId: '88155', tranId: 'INV-4398', tranDate: '2026-06-03' },
+        { transactionId: '88091', tranId: 'INV-4372', tranDate: '2026-05-27' },
+      ],
+    },
+  },
+  {
+    customerId: '10644', companyName: 'Lakewood Water District', parentId: null,
+    ruleId: 6, ruleLabel: 'Incomplete Shipping/Billing Address',
+    detail: 'Default address is missing required fields: Addressee, Zip.',
+    status: 'dismissed', note: 'PO Box — no zip required per billing policy.', reviewedBy: 'Tom R.',
+    reviewedAt: '2026-06-23T09:10:00Z',
+    netsuiteUrl: '#',
+    fields: {
+      addresses: [{ type: 'billing', missingFields: ['Addressee', 'Zip'] }],
+      missingFields: ['Addressee', 'Zip'],
+    },
+  },
+];
+
+const RULE_COLORS = { 1:'#dbeafe', 2:'#fce7f3', 3:'#ffedd5', 4:'#ede9fe', 5:'#fef9c3', 6:'#dcfce7' };
+const RULE_LABELS = {
+  1:'Missing Online Invoice vs. Siblings', 2:'No Delivery Method',
+  3:'Email Flag, No Address', 4:'Email Domain Mismatch',
+  5:'PO Required, Missing on Invoice', 6:'Incomplete Address',
+};
+
+let flags = MOCK_FLAGS.map(f => ({ ...f }));
+let statusFilter = 'open';
+let ruleFilter = '';
+let searchQ = '';
+
+// ── Rendering ──────────────────────────────────────────────────────────────
+function getSummary() {
+  const s = { open:0, reviewed:0, dismissed:0 };
+  for (const f of flags) s[f.status] = (s[f.status]||0)+1;
+  return { ...s, total: flags.length };
+}
+
+function renderHeader() {
+  const s = getSummary();
+  const byRule = {};
+  for (let i=1;i<=6;i++) byRule[i]=0;
+  for (const f of flags) if (f.status==='open') byRule[f.ruleId]=(byRule[f.ruleId]||0)+1;
+
+  return `
+    <div class="header">
+      <div class="header-top">
+        <div>
+          <h1>Billing Assessment</h1>
+          <p class="subtitle">Last scan: ${new Date().toLocaleString()} &nbsp;·&nbsp; Demo mode (mock data)</p>
+        </div>
+        <button class="btn-scan" onclick="handleScan()">↺ Run Scan</button>
+      </div>
+      <div class="stat-row">
+        <div><div class="stat-val" style="color:#ef4444">${s.open}</div><div class="stat-label">Open</div></div>
+        <div><div class="stat-val" style="color:#10b981">${s.reviewed}</div><div class="stat-label">Reviewed</div></div>
+        <div><div class="stat-val" style="color:#9ca3af">${s.dismissed}</div><div class="stat-label">Dismissed</div></div>
+        <div><div class="stat-val" style="color:#6366f1">${s.total}</div><div class="stat-label">Total Flags</div></div>
+      </div>
+      <div class="rule-row">
+        ${Object.entries(byRule).map(([rid,cnt]) => `
+          <div class="rule-pill">
+            <span class="rule-num">Rule ${rid}</span>
+            <span class="rule-count">${cnt}</span>
+            <span class="rule-lbl">${RULE_LABELS[rid]}</span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+function renderToolbar() {
+  const visible = getFiltered().length;
+  return `
+    <div class="toolbar">
+      <input class="search" placeholder="Search by name or ID…" value="${searchQ}"
+        oninput="searchQ=this.value;renderAll()" />
+      <select class="select-filter" onchange="statusFilter=this.value;renderAll()">
+        <option value="" ${statusFilter===''?'selected':''}>All Statuses</option>
+        <option value="open" ${statusFilter==='open'?'selected':''}>Open</option>
+        <option value="reviewed" ${statusFilter==='reviewed'?'selected':''}>Reviewed</option>
+        <option value="dismissed" ${statusFilter==='dismissed'?'selected':''}>Dismissed</option>
+      </select>
+      <select class="select-filter" onchange="ruleFilter=this.value;renderAll()">
+        <option value="">All Rules</option>
+        ${[1,2,3,4,5,6].map(r=>`<option value="${r}" ${ruleFilter==r?'selected':''}>${RULE_LABELS[r]}</option>`).join('')}
+      </select>
+      <span class="result-count">${visible} flag${visible!==1?'s':''}</span>
+    </div>`;
+}
+
+function getFiltered() {
+  return flags.filter(f => {
+    if (statusFilter && f.status !== statusFilter) return false;
+    if (ruleFilter && String(f.ruleId) !== String(ruleFilter)) return false;
+    if (searchQ) {
+      const q = searchQ.toLowerCase();
+      if (!f.companyName?.toLowerCase().includes(q) && !f.customerId?.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function renderFieldDetails(f) {
+  const { fields, ruleId } = f;
+  if (!fields) return '';
+
+  if (ruleId===5 && fields.invoices?.length) {
+    return `<div class="field-box">
+      <div style="font-weight:600;margin-bottom:6px">Invoices missing PO# (${fields.invoiceCount} total):</div>
+      <table>
+        <tr><th>Transaction ID</th><th>Tran #</th><th>Date</th></tr>
+        ${fields.invoices.map(i=>`<tr><td>${i.transactionId}</td><td>${i.tranId}</td><td>${i.tranDate}</td></tr>`).join('')}
+      </table>
+    </div>`;
+  }
+
+  if (ruleId===6 && fields.addresses?.length) {
+    return `<div class="field-box">
+      <div style="font-weight:600;margin-bottom:6px">Address issues:</div>
+      ${fields.addresses.map(a=>`
+        <div class="field-row">
+          <span class="field-key">${a.type}</span>
+          <span class="field-miss">Missing: ${a.missingFields.join(', ')}</span>
+        </div>`).join('')}
+    </div>`;
+  }
+
+  const entries = Object.entries(fields).filter(([,v])=>v!==null&&v!==undefined&&!Array.isArray(v)&&typeof v!=='object');
+  if (!entries.length) return '';
+  return `<div class="field-box">
+    ${entries.map(([k,v])=>`
+      <div class="field-row">
+        <span class="field-key">${k}</span>
+        <span class="field-val">${String(v)||'<em style="color:#9ca3af">empty</em>'}</span>
+      </div>`).join('')}
+  </div>`;
+}
+
+function renderCard(f) {
+  const ss = { open:'Open', reviewed:'Reviewed', dismissed:'Dismissed' };
+  const sc = { open:'status-open', reviewed:'status-reviewed', dismissed:'status-dismissed' };
+  const id = `card-${f.customerId}-${f.ruleId}`;
+  return `
+    <div class="card" id="${id}" style="border-left-color:${RULE_COLORS[f.ruleId]}">
+      <div class="card-header" onclick="toggleCard('${id}')">
+        <div class="card-left">
+          <span class="chevron" id="${id}-chev">▸</span>
+          <div>
+            <div class="company">${f.companyName}</div>
+            <div class="meta">ID: ${f.customerId}${f.parentId?`<span class="parent-tag">Parent: ${f.parentId}</span>`:''}</div>
+          </div>
+        </div>
+        <div class="card-right">
+          <span class="rule-tag">Rule ${f.ruleId}</span>
+          <span class="status-badge ${sc[f.status]}" id="${id}-badge">${ss[f.status]}</span>
+          <a class="ns-link" href="${f.netsuiteUrl}" target="_blank" onclick="event.stopPropagation()">Open in NetSuite ↗</a>
+        </div>
+      </div>
+      <div class="card-body" id="${id}-body">
+        <div class="rule-label">${f.ruleLabel}</div>
+        <p class="detail">${f.detail}</p>
+        ${renderFieldDetails(f)}
+        <div class="review-form">
+          <div class="form-row">
+            <label class="form-label">Reviewer name</label>
+            <input class="form-input" id="${id}-reviewer" value="${f.reviewedBy||''}" placeholder="Your name" />
+          </div>
+          <div class="form-row">
+            <label class="form-label">Note</label>
+            <textarea class="form-textarea" id="${id}-note" rows="2" placeholder="Add a note about this flag…">${f.note||''}</textarea>
+          </div>
+          ${f.reviewedAt ? `<p class="reviewed-info">Last updated ${new Date(f.reviewedAt).toLocaleString()}${f.reviewedBy?' by '+f.reviewedBy:''}</p>`:''}
+          <div class="actions">
+            <button class="action-btn btn-reviewed" onclick="saveFlag('${f.customerId}',${f.ruleId},'reviewed','${id}')">Mark Reviewed</button>
+            <button class="action-btn btn-dismiss"  onclick="saveFlag('${f.customerId}',${f.ruleId},'dismissed','${id}')">Dismiss</button>
+            ${f.status!=='open'?`<button class="action-btn btn-reopen" onclick="saveFlag('${f.customerId}',${f.ruleId},'open','${id}')">Re-open</button>`:''}
+            <span class="saved-toast" id="${id}-toast">Saved ✓</span>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderAll() {
+  const filtered = getFiltered();
+  const empty = filtered.length===0
+    ? `<div style="text-align:center;color:#6b7280;padding:60px 0;font-size:15px">${
+        flags.length===0?'No flags found.':'No flags match the current filters.'}</div>`
+    : '';
+  document.getElementById('app').innerHTML =
+    renderHeader() +
+    renderToolbar() +
+    `<div class="flags">${empty}${filtered.map(renderCard).join('')}</div>`;
+}
+
+// ── Interactions ───────────────────────────────────────────────────────────
+function toggleCard(id) {
+  const body = document.getElementById(id+'-body');
+  const chev = document.getElementById(id+'-chev');
+  const open = body.classList.toggle('open');
+  chev.textContent = open ? '▾' : '▸';
+}
+
+function saveFlag(customerId, ruleId, status, cardId) {
+  const note = document.getElementById(cardId+'-note')?.value || null;
+  const reviewedBy = document.getElementById(cardId+'-reviewer')?.value || null;
+
+  // Update in-memory flag
+  const flag = flags.find(f => f.customerId===customerId && f.ruleId===ruleId);
+  if (flag) {
+    flag.status = status;
+    flag.note = note;
+    flag.reviewedBy = reviewedBy;
+    flag.reviewedAt = new Date().toISOString();
+  }
+
+  // Flash toast, then re-render
+  const toast = document.getElementById(cardId+'-toast');
+  if (toast) { toast.classList.add('show'); }
+  setTimeout(() => renderAll(), 600);
+}
+
+function handleScan() {
+  const btn = document.querySelector('.btn-scan');
+  btn.textContent = '⟳ Scanning…';
+  btn.disabled = true;
+  btn.style.background = '#9ca3af';
+  setTimeout(() => { renderAll(); }, 2000);
+}
+
+// Initial render
+renderAll();
+</script>
+</body>
+</html>
