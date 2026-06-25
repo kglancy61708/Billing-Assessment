@@ -142,10 +142,10 @@ app.get('/api/diagnose', async (req, res) => {
   const results = [];
 
   const tests = [
-    { name: 'metadata: tables containing "customer"', q: `SELECT tablename FROM OA_TABLES WHERE LOWER(tablename) LIKE '%customer%' AND rownum <= 20` },
-    { name: 'metadata: tables containing "entity"', q: `SELECT tablename FROM OA_TABLES WHERE LOWER(tablename) LIKE '%entity%' AND rownum <= 20` },
-    { name: 'metadata: tables containing "transaction"', q: `SELECT tablename FROM OA_TABLES WHERE LOWER(tablename) LIKE '%transact%' AND rownum <= 10` },
-    { name: 'department (known working)', q: `SELECT id, name FROM department WHERE rownum <= 3` },
+    { name: 'CUSTOMER uppercase', q: `SELECT id FROM CUSTOMER WHERE rownum <= 1` },
+    { name: 'customer lowercase', q: `SELECT id FROM customer WHERE rownum <= 1` },
+    { name: 'transaction join entity', q: `SELECT t.id, t.entity, t.type FROM transaction t WHERE t.type = 'CustInvc' AND rownum <= 1` },
+    { name: 'department', q: `SELECT id, name FROM department WHERE rownum <= 3` },
   ];
 
   for (const test of tests) {
