@@ -142,14 +142,13 @@ app.get('/api/diagnose', async (req, res) => {
   const results = [];
 
   const tests = [
-    { name: 'transaction table', q: `SELECT id, type, entity FROM transaction WHERE rownum <= 1` },
+    { name: 'transaction COUNT', q: `SELECT COUNT(*) AS cnt FROM transaction` },
+    { name: 'transaction with entity', q: `SELECT id, type, entity FROM transaction WHERE rownum <= 3` },
     { name: 'customer', q: `SELECT id FROM customer WHERE rownum <= 1` },
-    { name: 'contact', q: `SELECT id FROM contact WHERE rownum <= 1` },
-    { name: 'vendor', q: `SELECT id FROM vendor WHERE rownum <= 1` },
-    { name: 'job (project)', q: `SELECT id FROM job WHERE rownum <= 1` },
     { name: 'account', q: `SELECT id FROM account WHERE rownum <= 1` },
-    { name: 'ns_customer (prefixed)', q: `SELECT id FROM ns_customer WHERE rownum <= 1` },
-    { name: 'custjob', q: `SELECT id FROM custjob WHERE rownum <= 1` },
+    { name: 'currency', q: `SELECT id, name FROM currency WHERE rownum <= 1` },
+    { name: 'subsidiary', q: `SELECT id, name FROM subsidiary WHERE rownum <= 1` },
+    { name: 'department', q: `SELECT id, name FROM department WHERE rownum <= 1` },
   ];
 
   for (const test of tests) {
