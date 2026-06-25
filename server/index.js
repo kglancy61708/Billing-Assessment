@@ -142,13 +142,10 @@ app.get('/api/diagnose', async (req, res) => {
   const results = [];
 
   const tests = [
-    { name: 'transaction COUNT', q: `SELECT COUNT(*) AS cnt FROM transaction` },
-    { name: 'transaction with entity', q: `SELECT id, type, entity FROM transaction WHERE rownum <= 3` },
-    { name: 'customer', q: `SELECT id FROM customer WHERE rownum <= 1` },
-    { name: 'account', q: `SELECT id FROM account WHERE rownum <= 1` },
-    { name: 'currency', q: `SELECT id, name FROM currency WHERE rownum <= 1` },
-    { name: 'subsidiary', q: `SELECT id, name FROM subsidiary WHERE rownum <= 1` },
-    { name: 'department', q: `SELECT id, name FROM department WHERE rownum <= 1` },
+    { name: 'metadata: tables containing "customer"', q: `SELECT tablename FROM OA_TABLES WHERE LOWER(tablename) LIKE '%customer%' AND rownum <= 20` },
+    { name: 'metadata: tables containing "entity"', q: `SELECT tablename FROM OA_TABLES WHERE LOWER(tablename) LIKE '%entity%' AND rownum <= 20` },
+    { name: 'metadata: tables containing "transaction"', q: `SELECT tablename FROM OA_TABLES WHERE LOWER(tablename) LIKE '%transact%' AND rownum <= 10` },
+    { name: 'department (known working)', q: `SELECT id, name FROM department WHERE rownum <= 3` },
   ];
 
   for (const test of tests) {
