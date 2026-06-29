@@ -129,6 +129,25 @@
          border-bottom:1px solid #e5e7eb; font-size:12px; }
     td { padding:4px 8px; border-bottom:1px solid #f3f4f6;
          color:#374151; font-family:monospace; font-size:12px; }
+
+    /* Parent groups */
+    .parent-group { margin-bottom:20px; }
+    .parent-group-header {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:8px 14px; background:#e8edf5; border-radius:8px 8px 0 0;
+      border:1px solid #c9d4e8; cursor:pointer; user-select:none;
+    }
+    .parent-group-header:hover { background:#dce4f0; }
+    .parent-group-title { font-weight:700; font-size:13px; color:#1e3a5f; display:flex; align-items:center; gap:8px; }
+    .parent-group-meta { font-size:12px; color:#4b6589; }
+    .parent-group-count {
+      background:#1a56db; color:#fff; border-radius:12px;
+      padding:1px 8px; font-size:12px; font-weight:700;
+    }
+    .parent-group-body { border:1px solid #c9d4e8; border-top:none; border-radius:0 0 8px 8px; overflow:hidden; }
+    .parent-group-body .card { border-radius:0; margin-bottom:0; border-bottom:1px solid #f0f0f0; box-shadow:none; }
+    .parent-group-body .card:last-child { border-bottom:none; }
+    .parent-group-body.collapsed { display:none; }
   </style>
 </head>
 <body>
@@ -228,6 +247,50 @@ function getFiltered() {
     }
     return true;
   });
+}
+
+// Group filtered flags: parent accounts first (parentId null), then sub-accounts nested under their parent.
+// Flags with no parent stand alone. Flags whose parent has other flags get grouped together.
+function getGrouped(filtered) {
+  const groups = [];
+  const byParent = {};
+
+  for (const f of filtered) {
+    const key = f.parentId || '__standalone__' + f.customerId;
+    if (!byParent[key]) byParent[key] = { parentId: f.parentId, flags: [] };
+    byParent[key].flags.push(f);
+  }
+
+  // Build lookup: customerId -> companyName for parent label
+  const nameById = {};
+  for (const f of flags) nameById[String(f.customerId)] = f.companyName;
+
+  for (const [key, group] of Object.entries(byParent)) {
+    const isParentGroup = group.parentId != null;
+    groups.push({
+      parentId: group.parentId,
+      parentName: isParentGroup ? (nameById[String(group.parentId)] || `Parent ID ${group.parentId}`) : null,
+      flags: group.flags,
+    });
+  }
+
+  // Sort: grouped (has parentId) first, then standalones; within each, sort by parentId then companyName
+  groups.sort((a, b) => {
+    if (a.parentId && !b.parentId) return -1;
+    if (!a.parentId && b.parentId) return 1;
+    if (a.parentId && b.parentId) return String(a.parentId).localeCompare(String(b.parentId));
+    return (a.flags[0]?.companyName || '').localeCompare(b.flags[0]?.companyName || '');
+  });
+
+  return groups;
+}
+
+function toggleGroup(id) {
+  const body = document.getElementById(id + '-body');
+  const chev = document.getElementById(id + '-chev');
+  if (!body) return;
+  const collapsed = body.classList.toggle('collapsed');
+  chev.textContent = collapsed ? '▸' : '▾';
 }
 
 function renderFieldDetails(f) {
@@ -394,19 +457,42 @@ async function loadFlags() {
   }
 }
 
-// Reload from API when filters change
-const _renderAll = renderAll;
+function renderGroup(group) {
+  if (!group.parentId) {
+    // Standalone flag — no group wrapper, just render the card directly
+    return group.flags.map(renderCard).join('');
+  }
+  const gid = `group-${group.parentId}`;
+  const openCount = group.flags.filter(f => f.status === 'open').length;
+  return `
+    <div class="parent-group">
+      <div class="parent-group-header" onclick="toggleGroup('${gid}')">
+        <div class="parent-group-title">
+          <span class="chevron" id="${gid}-chev">▾</span>
+          ${group.parentName}
+          <span class="parent-group-count">${group.flags.length} flag${group.flags.length !== 1 ? 's' : ''}</span>
+          ${openCount > 0 ? `<span style="font-size:12px;font-weight:600;color:#b45309">${openCount} open</span>` : ''}
+        </div>
+        <div class="parent-group-meta">Parent ID: ${group.parentId}</div>
+      </div>
+      <div class="parent-group-body" id="${gid}-body">
+        ${group.flags.map(renderCard).join('')}
+      </div>
+    </div>`;
+}
+
 function renderAll() {
   const filtered = getFiltered();
+  const groups = getGrouped(filtered);
   const empty = isLoading
     ? `<div style="text-align:center;color:#6b7280;padding:60px 0;font-size:15px">Loading flags…</div>`
-    : filtered.length===0
-      ? `<div style="text-align:center;color:#6b7280;padding:60px 0;font-size:15px">${flags.length===0?'No flags found. Click Run Scan to check your accounts.':'No flags match the current filters.'}</div>`
+    : filtered.length === 0
+      ? `<div style="text-align:center;color:#6b7280;padding:60px 0;font-size:15px">${flags.length === 0 ? 'No flags found. Click Run Scan to check your accounts.' : 'No flags match the current filters.'}</div>`
       : '';
   document.getElementById('app').innerHTML =
     renderHeader() +
     renderToolbar() +
-    `<div class="flags">${empty}${filtered.map(renderCard).join('')}</div>`;
+    `<div class="flags">${empty}${groups.map(renderGroup).join('')}</div>`;
 }
 
 // Initial load
