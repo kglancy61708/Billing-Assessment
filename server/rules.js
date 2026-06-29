@@ -6,6 +6,7 @@ async function rule1_missingOnlineInvoiceVsSiblings() {
     SELECT c.id, c.companyname, c.parent, c.custentity310
     FROM customer c
     WHERE c.isinactive = 'F'
+      AND c.entitystatus = 13
       AND c.parent IS NOT NULL
       AND (c.custentity310 = 'F' OR c.custentity310 IS NULL)
       AND EXISTS (
@@ -14,6 +15,7 @@ async function rule1_missingOnlineInvoiceVsSiblings() {
           AND s.id != c.id
           AND s.custentity310 = 'T'
           AND s.isinactive = 'F'
+          AND s.entitystatus = 13
       )
   `);
 
@@ -34,6 +36,7 @@ async function rule2_noDeliveryMethodSet() {
     SELECT c.id, c.companyname, c.printtransactions, c.custentity264, c.custentity310
     FROM customer c
     WHERE c.isinactive = 'F'
+      AND c.entitystatus = 13
       AND (c.printtransactions = 'F' OR c.printtransactions IS NULL)
       AND (c.custentity264 = 'F' OR c.custentity264 IS NULL)
       AND (c.custentity310 = 'F' OR c.custentity310 IS NULL)
@@ -60,6 +63,7 @@ async function rule3_emailFlagNoAddress() {
     SELECT c.id, c.companyname, c.email
     FROM customer c
     WHERE c.isinactive = 'F'
+      AND c.entitystatus = 13
       AND c.custentity264 = 'T'
       AND (c.email IS NULL OR c.email = '')
   `);
@@ -81,6 +85,7 @@ async function rule4_emailDomainMismatch() {
     SELECT c.id, c.companyname, c.parent, c.email
     FROM customer c
     WHERE c.isinactive = 'F'
+      AND c.entitystatus = 13
       AND c.parent IS NOT NULL
       AND c.email IS NOT NULL
       AND c.email != ''
@@ -140,6 +145,7 @@ async function rule5_poRequiredMissing() {
     FROM customer c
     JOIN transaction t ON t.entity = c.id
     WHERE c.isinactive = 'F'
+      AND c.entitystatus = 13
       AND c.custentity_po_required = 'T'
       AND t.type = 'CustInvc'
       AND t.voided = 'F'
@@ -187,6 +193,7 @@ async function rule6_incompleteAddress() {
     JOIN customeraddressbook ca ON ca.entity = c.id
     JOIN entityaddress a ON a.nkey = ca.addressbookaddress
     WHERE c.isinactive = 'F'
+      AND c.entitystatus = 13
       AND (ca.defaultbilling = 'T' OR ca.defaultshipping = 'T')
   `);
 
