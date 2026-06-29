@@ -146,6 +146,8 @@ app.get('/api/diagnose', async (req, res) => {
     { name: 'SuiteQL: transaction', q: `SELECT id, type FROM transaction WHERE rownum <= 1` },
     { name: 'SuiteQL: customer', q: `SELECT id FROM customer WHERE rownum <= 1` },
     { name: 'SuiteQL: department', q: `SELECT id, name FROM department WHERE rownum <= 1` },
+    { name: 'SuiteQL: customeraddressbook', q: `SELECT * FROM customeraddressbook WHERE rownum <= 1` },
+    { name: 'SuiteQL: customeraddressbookentityaddress', q: `SELECT * FROM customeraddressbookentityaddress WHERE rownum <= 1` },
   ];
 
   for (const test of tests) {
