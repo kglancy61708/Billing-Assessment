@@ -105,4 +105,24 @@ function getRecordUrl(customerId) {
   return `https://${acct}.app.netsuite.com/app/common/entity/custjob.nl?id=${customerId}`;
 }
 
-module.exports = { suiteQL, suiteQLAll, updateCustomer, getRecordUrl };
+// Test REST Record API access to customer list
+async function listCustomersREST(limit = 3) {
+  const url = `${getBaseUrl()}/services/rest/record/v1/customer?limit=${limit}`;
+  const oauth = getOAuth();
+  const token = { key: NS_TOKEN_ID, secret: NS_TOKEN_SECRET };
+
+  const authData = oauth.authorize({ url, method: 'GET' }, token);
+  const authHeader = oauth.toHeader(authData);
+  authHeader.Authorization = authHeader.Authorization.replace(
+    'OAuth ', `OAuth realm="${NS_ACCOUNT_ID.toUpperCase()}",`
+  );
+
+  const res = await fetch(url, { method: 'GET', headers: authHeader });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`REST Record API error ${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
+module.exports = { suiteQL, suiteQLAll, updateCustomer, getRecordUrl, listCustomersREST };

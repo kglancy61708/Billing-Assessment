@@ -138,14 +138,14 @@ app.get('/api/credentials', (req, res) => {
 
 // GET /api/diagnose — verifies NetSuite connectivity and SuiteQL table names
 app.get('/api/diagnose', async (req, res) => {
-  const { suiteQL } = require('./netsuite');
+  const { suiteQL, listCustomersREST } = require('./netsuite');
   const results = [];
 
+  // SuiteQL tests
   const tests = [
-    { name: 'CUSTOMER uppercase', q: `SELECT id FROM CUSTOMER WHERE rownum <= 1` },
-    { name: 'customer lowercase', q: `SELECT id FROM customer WHERE rownum <= 1` },
-    { name: 'transaction join entity', q: `SELECT t.id, t.entity, t.type FROM transaction t WHERE t.type = 'CustInvc' AND rownum <= 1` },
-    { name: 'department', q: `SELECT id, name FROM department WHERE rownum <= 3` },
+    { name: 'SuiteQL: transaction', q: `SELECT id, type FROM transaction WHERE rownum <= 1` },
+    { name: 'SuiteQL: customer', q: `SELECT id FROM customer WHERE rownum <= 1` },
+    { name: 'SuiteQL: department', q: `SELECT id, name FROM department WHERE rownum <= 1` },
   ];
 
   for (const test of tests) {
@@ -155,6 +155,14 @@ app.get('/api/diagnose', async (req, res) => {
     } catch (err) {
       results.push({ name: test.name, status: 'ERROR', error: err.message });
     }
+  }
+
+  // REST Record API test
+  try {
+    const data = await listCustomersREST(3);
+    results.push({ name: 'REST Record API: customer list', status: 'OK', rows: data.items?.length ?? 0, sample: data.items?.[0] ?? null });
+  } catch (err) {
+    results.push({ name: 'REST Record API: customer list', status: 'ERROR', error: err.message });
   }
 
   const allOk = results.every(r => r.status === 'OK');
