@@ -34,7 +34,12 @@
     .rule-pill {
       display:flex; align-items:center; gap:6px;
       background:#f3f4f6; border-radius:20px; padding:3px 10px 3px 8px; font-size:12px;
+      cursor:pointer; border:2px solid transparent; transition:border-color 0.15s, background 0.15s;
     }
+    .rule-pill:hover { background:#e5e7eb; }
+    .rule-pill.active { background:#eff6ff; border-color:#1a56db; }
+    .rule-pill.active .rule-num { color:#1a56db; }
+    .rule-pill.active .rule-count { background:#1a56db; color:#fff; }
     .rule-num { font-weight:700; color:#374151; }
     .rule-count {
       background:#e5e7eb; border-radius:10px; padding:0 6px;
@@ -208,7 +213,7 @@ function renderHeader() {
       </div>
       <div class="rule-row">
         ${Object.entries(byRule).map(([rid,cnt]) => `
-          <div class="rule-pill">
+          <div class="rule-pill ${String(ruleFilter)===String(rid)?'active':''}" onclick="toggleRuleFilter('${rid}')">
             <span class="rule-num">Rule ${rid}</span>
             <span class="rule-count">${cnt}</span>
             <span class="rule-lbl">${RULE_LABELS[rid]}</span>
@@ -242,7 +247,7 @@ function renderToolbar() {
         <option value="reviewed" ${statusFilter==='reviewed'?'selected':''}>Reviewed</option>
         <option value="dismissed" ${statusFilter==='dismissed'?'selected':''}>Dismissed</option>
       </select>
-      <select class="select-filter" onchange="ruleFilter=this.value;renderAll()">
+      <select class="select-filter" data-rule onchange="ruleFilter=this.value;renderAll()">
         <option value="">All Rules</option>
         ${[1,2,3,4,5,6].map(r=>`<option value="${r}" ${ruleFilter==r?'selected':''}>${RULE_LABELS[r]}</option>`).join('')}
       </select>
@@ -399,6 +404,14 @@ function renderAll() {
 }
 
 // ── Interactions ───────────────────────────────────────────────────────────
+function toggleRuleFilter(rid) {
+  ruleFilter = String(ruleFilter) === String(rid) ? '' : String(rid);
+  // Keep dropdown in sync
+  const sel = document.querySelector('.select-filter[data-rule]');
+  if (sel) sel.value = ruleFilter;
+  renderAll();
+}
+
 function toggleCard(id) {
   const body = document.getElementById(id+'-body');
   const chev = document.getElementById(id+'-chev');
