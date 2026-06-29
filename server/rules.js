@@ -184,14 +184,13 @@ async function rule6_incompleteAddress() {
   const rows = await suiteQLAll(`
     SELECT c.id, c.companyname,
            ca.defaultbilling, ca.defaultshipping,
-           a.addressee,
-           a.addr1,
-           a.city,
-           a.state,
-           a.zip
+           ca.addressee,
+           ca.addr1,
+           ca.city,
+           ca.state,
+           ca.zip
     FROM customer c
     JOIN customeraddressbook ca ON ca.entity = c.id
-    JOIN entityaddress a ON a.nkey = ca.addressbookaddress
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
       AND (ca.defaultbilling = 'T' OR ca.defaultshipping = 'T')
