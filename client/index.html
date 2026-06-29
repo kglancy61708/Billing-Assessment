@@ -138,66 +138,6 @@
 </div>
 
 <script>
-// ── Mock data ──────────────────────────────────────────────────────────────
-const MOCK_FLAGS = [
-  {
-    customerId: '10482', companyName: 'Acme Corp – West Division', parentId: '10001',
-    ruleId: 1, ruleLabel: 'Missing Online Invoice Service (vs. siblings)',
-    detail: 'One or more sibling sub-accounts have Customer has Online Invoice Service (custentity310) checked, but this account does not.',
-    status: 'open', note: null, reviewedBy: null, reviewedAt: null,
-    netsuiteUrl: '#', fields: { custentity310: 'F' },
-  },
-  {
-    customerId: '10391', companyName: 'Riverfront Systems LLC', parentId: null,
-    ruleId: 2, ruleLabel: 'No Invoice Delivery Method Set',
-    detail: 'None of Print Transactions, Invoices to Email, or Online Invoice Service are enabled.',
-    status: 'open', note: null, reviewedBy: null, reviewedAt: null,
-    netsuiteUrl: '#', fields: { printtransactions: 'F', custentity264: 'F', custentity310: 'F' },
-  },
-  {
-    customerId: '10204', companyName: 'Blue Ridge Water Partners', parentId: null,
-    ruleId: 3, ruleLabel: 'Invoices to Email — No Email Address',
-    detail: '"Invoices to Email" (custentity264) is enabled but the Email field is empty.',
-    status: 'reviewed', note: 'Confirmed with account manager — email being added by EOD.', reviewedBy: 'Sarah K.',
-    reviewedAt: '2026-06-24T15:22:00Z',
-    netsuiteUrl: '#', fields: { email: '' },
-  },
-  {
-    customerId: '10519', companyName: 'Desert Springs Municipal – East', parentId: '10500',
-    ruleId: 4, ruleLabel: 'Email Domain Mismatch vs. Siblings',
-    detail: 'Email domain "@gmail.com" differs from the majority domain "@desertsprings.gov" used by sibling sub-accounts under the same parent.',
-    status: 'open', note: null, reviewedBy: null, reviewedAt: null,
-    netsuiteUrl: '#', fields: { email: 'billing@gmail.com', expectedDomain: 'desertsprings.gov' },
-  },
-  {
-    customerId: '10877', companyName: 'Summit Valley Utilities', parentId: null,
-    ruleId: 5, ruleLabel: 'PO Required — Invoices Missing PO#',
-    detail: 'Customer requires a PO but 3 invoice(s) have no PO# (otherrefnum).',
-    status: 'open', note: null, reviewedBy: null, reviewedAt: null,
-    netsuiteUrl: '#',
-    fields: {
-      invoiceCount: 3,
-      invoices: [
-        { transactionId: '88201', tranId: 'INV-4421', tranDate: '2026-06-10' },
-        { transactionId: '88155', tranId: 'INV-4398', tranDate: '2026-06-03' },
-        { transactionId: '88091', tranId: 'INV-4372', tranDate: '2026-05-27' },
-      ],
-    },
-  },
-  {
-    customerId: '10644', companyName: 'Lakewood Water District', parentId: null,
-    ruleId: 6, ruleLabel: 'Incomplete Shipping/Billing Address',
-    detail: 'Default address is missing required fields: Addressee, Zip.',
-    status: 'dismissed', note: 'PO Box — no zip required per billing policy.', reviewedBy: 'Tom R.',
-    reviewedAt: '2026-06-23T09:10:00Z',
-    netsuiteUrl: '#',
-    fields: {
-      addresses: [{ type: 'billing', missingFields: ['Addressee', 'Zip'] }],
-      missingFields: ['Addressee', 'Zip'],
-    },
-  },
-];
-
 const RULE_COLORS = { 1:'#dbeafe', 2:'#fce7f3', 3:'#ffedd5', 4:'#ede9fe', 5:'#fef9c3', 6:'#dcfce7' };
 const RULE_LABELS = {
   1:'Missing Online Invoice vs. Siblings', 2:'No Delivery Method',
@@ -205,10 +145,13 @@ const RULE_LABELS = {
   5:'PO Required, Missing on Invoice', 6:'Incomplete Address',
 };
 
-let flags = MOCK_FLAGS.map(f => ({ ...f }));
+let flags = [];
+let scannedAt = null;
+let scanErrors = [];
 let statusFilter = 'open';
 let ruleFilter = '';
 let searchQ = '';
+let isLoading = true;
 
 // ── Rendering ──────────────────────────────────────────────────────────────
 function getSummary() {
@@ -223,12 +166,18 @@ function renderHeader() {
   for (let i=1;i<=6;i++) byRule[i]=0;
   for (const f of flags) if (f.status==='open') byRule[f.ruleId]=(byRule[f.ruleId]||0)+1;
 
+  const subtitle = isLoading
+    ? 'Loading…'
+    : scannedAt
+      ? `Last scan: ${new Date(scannedAt).toLocaleString()}`
+      : 'No scan data yet';
+
   return `
     <div class="header">
       <div class="header-top">
         <div>
           <h1>Billing Assessment</h1>
-          <p class="subtitle">Last scan: ${new Date().toLocaleString()} &nbsp;·&nbsp; Demo mode (mock data)</p>
+          <p class="subtitle">${subtitle}</p>
         </div>
         <button class="btn-scan" onclick="handleScan()">↺ Run Scan</button>
       </div>
@@ -382,35 +331,86 @@ function toggleCard(id) {
   chev.textContent = open ? '▾' : '▸';
 }
 
-function saveFlag(customerId, ruleId, status, cardId) {
+async function saveFlag(customerId, ruleId, status, cardId) {
   const note = document.getElementById(cardId+'-note')?.value || null;
   const reviewedBy = document.getElementById(cardId+'-reviewer')?.value || null;
 
-  // Update in-memory flag
-  const flag = flags.find(f => f.customerId===customerId && f.ruleId===ruleId);
-  if (flag) {
-    flag.status = status;
-    flag.note = note;
-    flag.reviewedBy = reviewedBy;
-    flag.reviewedAt = new Date().toISOString();
+  try {
+    await fetch(`/api/flags/${customerId}/${ruleId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, note, reviewedBy }),
+    });
+    const flag = flags.find(f => String(f.customerId)===String(customerId) && f.ruleId===ruleId);
+    if (flag) { flag.status = status; flag.note = note; flag.reviewedBy = reviewedBy; flag.reviewedAt = new Date().toISOString(); }
+    const toast = document.getElementById(cardId+'-toast');
+    if (toast) { toast.classList.add('show'); }
+    setTimeout(() => renderAll(), 600);
+  } catch(err) {
+    alert('Failed to save: ' + err.message);
   }
-
-  // Flash toast, then re-render
-  const toast = document.getElementById(cardId+'-toast');
-  if (toast) { toast.classList.add('show'); }
-  setTimeout(() => renderAll(), 600);
 }
 
-function handleScan() {
+async function handleScan() {
   const btn = document.querySelector('.btn-scan');
   btn.textContent = '⟳ Scanning…';
   btn.disabled = true;
   btn.style.background = '#9ca3af';
-  setTimeout(() => { renderAll(); }, 2000);
+
+  try {
+    await fetch('/api/scan', { method: 'POST' });
+    // Poll until scan completes
+    for (let i = 0; i < 60; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const st = await fetch('/api/scan/status').then(r => r.json());
+      if (!st.scanning) break;
+    }
+    await loadFlags();
+  } catch(err) {
+    alert('Scan error: ' + err.message);
+  } finally {
+    btn.textContent = '↺ Run Scan';
+    btn.disabled = false;
+    btn.style.background = '';
+  }
 }
 
-// Initial render
-renderAll();
+async function loadFlags() {
+  isLoading = true;
+  renderAll();
+  try {
+    const params = new URLSearchParams();
+    if (statusFilter) params.set('statusFilter', statusFilter);
+    if (ruleFilter) params.set('ruleFilter', ruleFilter);
+    const data = await fetch('/api/flags?' + params).then(r => r.json());
+    flags = data.flags || [];
+    scannedAt = data.scannedAt || null;
+    scanErrors = data.errors || [];
+  } catch(err) {
+    console.error('Failed to load flags:', err);
+  } finally {
+    isLoading = false;
+    renderAll();
+  }
+}
+
+// Reload from API when filters change
+const _renderAll = renderAll;
+function renderAll() {
+  const filtered = getFiltered();
+  const empty = isLoading
+    ? `<div style="text-align:center;color:#6b7280;padding:60px 0;font-size:15px">Loading flags…</div>`
+    : filtered.length===0
+      ? `<div style="text-align:center;color:#6b7280;padding:60px 0;font-size:15px">${flags.length===0?'No flags found. Click Run Scan to check your accounts.':'No flags match the current filters.'}</div>`
+      : '';
+  document.getElementById('app').innerHTML =
+    renderHeader() +
+    renderToolbar() +
+    `<div class="flags">${empty}${filtered.map(renderCard).join('')}</div>`;
+}
+
+// Initial load
+loadFlags();
 </script>
 </body>
 </html>
