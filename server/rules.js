@@ -40,6 +40,7 @@ async function rule2_noDeliveryMethodSet() {
       AND (c.printtransactions = 'F' OR c.printtransactions IS NULL)
       AND (c.custentity264 = 'F' OR c.custentity264 IS NULL)
       AND (c.custentity310 = 'F' OR c.custentity310 IS NULL)
+      AND (c.custentity276 IS NULL OR c.custentity276 = '')
   `);
 
   return rows.map(r => ({
