@@ -261,15 +261,14 @@ function getGrouped(filtered) {
     byParent[key].flags.push(f);
   }
 
-  // Build lookup: customerId -> companyName for parent label
-  const nameById = {};
-  for (const f of flags) nameById[String(f.customerId)] = f.companyName;
-
   for (const [key, group] of Object.entries(byParent)) {
     const isParentGroup = group.parentId != null;
+    const parentName = isParentGroup
+      ? (group.flags.find(f => f.parentName)?.parentName || `Parent ID ${group.parentId}`)
+      : null;
     groups.push({
       parentId: group.parentId,
-      parentName: isParentGroup ? (nameById[String(group.parentId)] || `Parent ID ${group.parentId}`) : null,
+      parentName,
       flags: group.flags,
     });
   }

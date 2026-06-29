@@ -260,6 +260,22 @@ async function runAllRules() {
     }
   }
 
+  // Resolve parent names in one batch query
+  const parentIds = [...new Set(flags.map(f => f.parentId).filter(Boolean))];
+  if (parentIds.length > 0) {
+    try {
+      const idList = parentIds.join(',');
+      const rows = await suiteQLAll(`SELECT id, companyname FROM customer WHERE id IN (${idList})`);
+      const nameById = {};
+      for (const r of rows) nameById[String(r.id)] = r.companyname;
+      for (const f of flags) {
+        if (f.parentId) f.parentName = nameById[String(f.parentId)] || null;
+      }
+    } catch (e) {
+      // Non-fatal — parent names just won't show
+    }
+  }
+
   return { flags, errors };
 }
 
