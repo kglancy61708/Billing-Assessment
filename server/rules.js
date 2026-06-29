@@ -184,14 +184,13 @@ async function rule6_incompleteAddress() {
   const rows = await suiteQLAll(`
     SELECT c.id, c.companyname,
            ca.defaultbilling, ca.defaultshipping,
-           a.addressee,
            a.addr1,
            a.city,
            a.state,
            a.zip
     FROM customer c
     JOIN customeraddressbook ca ON ca.entity = c.id
-    JOIN address a ON a.nkey = ca.addressbookaddress
+    JOIN customeraddressbookentityaddress a ON a.nkey = ca.addressbookaddress
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
       AND (ca.defaultbilling = 'T' OR ca.defaultshipping = 'T')
@@ -205,7 +204,6 @@ async function rule6_incompleteAddress() {
     }
 
     const missing = [];
-    if (!r.addressee || r.addressee.trim() === '') missing.push('Addressee');
     if (!r.addr1 || r.addr1.trim() === '') missing.push('Address 1');
     if (!r.city || r.city.trim() === '') missing.push('City');
     if (!r.state || r.state.trim() === '') missing.push('State');
