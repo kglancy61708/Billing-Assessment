@@ -7,6 +7,7 @@ async function rule1_missingOnlineInvoiceVsSiblings() {
     FROM customer c
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
+      AND c.balance > 0
       AND c.parent IS NOT NULL
       AND (c.custentity310 = 'F' OR c.custentity310 IS NULL)
       AND EXISTS (
@@ -37,6 +38,7 @@ async function rule2_noDeliveryMethodSet() {
     FROM customer c
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
+      AND c.balance > 0
       AND (c.printtransactions = 'F' OR c.printtransactions IS NULL)
       AND (c.custentity264 = 'F' OR c.custentity264 IS NULL)
       AND (c.custentity310 = 'F' OR c.custentity310 IS NULL)
@@ -65,6 +67,7 @@ async function rule3_emailFlagNoAddress() {
     FROM customer c
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
+      AND c.balance > 0
       AND c.custentity264 = 'T'
       AND (c.email IS NULL OR c.email = '')
   `);
@@ -87,6 +90,7 @@ async function rule4_emailDomainMismatch() {
     FROM customer c
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
+      AND c.balance > 0
       AND c.parent IS NOT NULL
       AND c.email IS NOT NULL
       AND c.email != ''
@@ -147,6 +151,7 @@ async function rule5_poRequiredMissing() {
     JOIN transaction t ON t.entity = c.id
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
+      AND c.balance > 0
       AND c.custentity_po_required = 'T'
       AND t.type = 'CustInvc'
       AND t.voided = 'F'
@@ -194,6 +199,7 @@ async function rule6_incompleteAddress() {
     JOIN customeraddressbookentityaddress a ON a.nkey = ca.addressbookaddress
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
+      AND c.balance > 0
       AND (ca.defaultbilling = 'T' OR ca.defaultshipping = 'T')
   `);
 
