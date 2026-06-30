@@ -191,6 +191,7 @@ async function rule5_poRequiredMissing() {
       AND c.custentity_po_required = 'T'
       AND t.type = 'CustInvc'
       AND t.voided = 'F'
+      AND t.status = 'A'
       AND (t.otherrefnum IS NULL OR TRIM(t.otherrefnum) = '')
     ORDER BY c.id, t.trandate DESC
   `);
