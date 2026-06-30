@@ -298,16 +298,15 @@ const RULES = [
 ];
 
 async function runAllRules() {
-  const results = await Promise.allSettled(RULES.map(fn => fn()));
   const flags = [];
   const errors = [];
 
-  for (let i = 0; i < results.length; i++) {
-    const r = results[i];
-    if (r.status === 'fulfilled') {
-      flags.push(...r.value);
-    } else {
-      errors.push({ ruleId: i + 1, error: r.reason?.message || String(r.reason) });
+  for (let i = 0; i < RULES.length; i++) {
+    try {
+      const result = await RULES[i]();
+      flags.push(...result);
+    } catch (err) {
+      errors.push({ ruleId: i + 1, error: err.message || String(err) });
     }
   }
 
