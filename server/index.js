@@ -148,6 +148,7 @@ app.get('/api/diagnose', async (req, res) => {
     { name: 'SuiteQL: department', q: `SELECT id, name FROM department WHERE rownum <= 1` },
     { name: 'SuiteQL: customeraddressbook', q: `SELECT * FROM customeraddressbook WHERE rownum <= 1` },
     { name: 'SuiteQL: customeraddressbookentityaddress', q: `SELECT * FROM customeraddressbookentityaddress WHERE rownum <= 1` },
+    { name: 'SuiteQL: overduebalance', q: `SELECT id, overduebalance FROM customer WHERE rownum <= 1` },
   ];
 
   for (const test of tests) {
