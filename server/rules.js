@@ -193,6 +193,7 @@ async function rule5_poRequiredMissing() {
       AND t.voided = 'F'
       AND t.status = 'A'
       AND (t.otherrefnum IS NULL OR TRIM(t.otherrefnum) = '')
+      AND (t.custbody28 IS NULL OR t.custbody28 = 'F')
     ORDER BY c.id, t.trandate DESC
   `);
 
