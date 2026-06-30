@@ -189,6 +189,7 @@ async function rule5_poRequiredMissing() {
           AND t.status = 'A'
       )
       AND c.custentity_po_required = 'T'
+      AND (c.custentity310 IS NULL OR c.custentity310 = 'F')
       AND t.type = 'CustInvc'
       AND t.voided = 'F'
       AND t.status = 'A'
