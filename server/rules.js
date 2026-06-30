@@ -113,6 +113,13 @@ async function rule4_emailDomainMismatch() {
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
       AND LOWER(c.companyname) NOT LIKE '%test%'
+      AND EXISTS (
+        SELECT 1 FROM transaction t
+        WHERE t.entity = c.id
+          AND t.type = 'CustInvc'
+          AND t.voided = 'F'
+          AND t.status = 'A'
+      )
       AND c.parent IS NOT NULL
       AND c.email IS NOT NULL
       AND c.email != ''
