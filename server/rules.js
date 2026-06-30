@@ -8,13 +8,6 @@ async function rule1_missingOnlineInvoiceVsSiblings() {
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
       AND LOWER(c.companyname) NOT LIKE '%test%'
-      AND EXISTS (
-        SELECT 1 FROM transaction t
-        WHERE t.entity = c.id
-          AND t.type = 'CustInvc'
-          AND t.voided = 'F'
-          AND t.status = 'open'
-      )
       AND c.parent IS NOT NULL
       AND (c.custentity310 = 'F' OR c.custentity310 IS NULL)
       AND EXISTS (
@@ -46,13 +39,6 @@ async function rule2_noDeliveryMethodSet() {
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
       AND LOWER(c.companyname) NOT LIKE '%test%'
-      AND EXISTS (
-        SELECT 1 FROM transaction t
-        WHERE t.entity = c.id
-          AND t.type = 'CustInvc'
-          AND t.voided = 'F'
-          AND t.status = 'open'
-      )
       AND (c.printtransactions = 'F' OR c.printtransactions IS NULL)
       AND (c.custentity264 = 'F' OR c.custentity264 IS NULL)
       AND (c.custentity310 = 'F' OR c.custentity310 IS NULL)
@@ -82,13 +68,6 @@ async function rule3_emailFlagNoAddress() {
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
       AND LOWER(c.companyname) NOT LIKE '%test%'
-      AND EXISTS (
-        SELECT 1 FROM transaction t
-        WHERE t.entity = c.id
-          AND t.type = 'CustInvc'
-          AND t.voided = 'F'
-          AND t.status = 'open'
-      )
       AND c.custentity264 = 'T'
       AND (c.email IS NULL OR c.email = '')
   `);
@@ -112,13 +91,6 @@ async function rule4_emailDomainMismatch() {
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
       AND LOWER(c.companyname) NOT LIKE '%test%'
-      AND EXISTS (
-        SELECT 1 FROM transaction t
-        WHERE t.entity = c.id
-          AND t.type = 'CustInvc'
-          AND t.voided = 'F'
-          AND t.status = 'open'
-      )
       AND c.parent IS NOT NULL
       AND c.email IS NOT NULL
       AND c.email != ''
@@ -180,13 +152,6 @@ async function rule5_poRequiredMissing() {
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
       AND LOWER(c.companyname) NOT LIKE '%test%'
-      AND EXISTS (
-        SELECT 1 FROM transaction t
-        WHERE t.entity = c.id
-          AND t.type = 'CustInvc'
-          AND t.voided = 'F'
-          AND t.status = 'open'
-      )
       AND c.custentity_po_required = 'T'
       AND t.type = 'CustInvc'
       AND t.voided = 'F'
@@ -235,13 +200,6 @@ async function rule6_incompleteAddress() {
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
       AND LOWER(c.companyname) NOT LIKE '%test%'
-      AND EXISTS (
-        SELECT 1 FROM transaction t
-        WHERE t.entity = c.id
-          AND t.type = 'CustInvc'
-          AND t.voided = 'F'
-          AND t.status = 'open'
-      )
       AND (ca.defaultbilling = 'T' OR ca.defaultshipping = 'T')
   `);
 
