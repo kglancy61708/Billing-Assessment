@@ -13,7 +13,6 @@ async function rule1_missingOnlineInvoiceVsSiblings() {
         WHERE t.entity = c.id
           AND t.type = 'CustInvc'
           AND t.voided = 'F'
-          AND t.statusRef IN ('open', 'partiallyPaid')
       )
       AND c.parent IS NOT NULL
       AND (c.custentity310 = 'F' OR c.custentity310 IS NULL)
@@ -51,7 +50,6 @@ async function rule2_noDeliveryMethodSet() {
         WHERE t.entity = c.id
           AND t.type = 'CustInvc'
           AND t.voided = 'F'
-          AND t.statusRef IN ('open', 'partiallyPaid')
       )
       AND (c.printtransactions = 'F' OR c.printtransactions IS NULL)
       AND (c.custentity264 = 'F' OR c.custentity264 IS NULL)
@@ -87,7 +85,6 @@ async function rule3_emailFlagNoAddress() {
         WHERE t.entity = c.id
           AND t.type = 'CustInvc'
           AND t.voided = 'F'
-          AND t.statusRef IN ('open', 'partiallyPaid')
       )
       AND c.custentity264 = 'T'
       AND (c.email IS NULL OR c.email = '')
@@ -117,7 +114,6 @@ async function rule4_emailDomainMismatch() {
         WHERE t.entity = c.id
           AND t.type = 'CustInvc'
           AND t.voided = 'F'
-          AND t.statusRef IN ('open', 'partiallyPaid')
       )
       AND c.parent IS NOT NULL
       AND c.email IS NOT NULL
@@ -185,7 +181,6 @@ async function rule5_poRequiredMissing() {
         WHERE t.entity = c.id
           AND t.type = 'CustInvc'
           AND t.voided = 'F'
-          AND t.statusRef IN ('open', 'partiallyPaid')
       )
       AND c.custentity_po_required = 'T'
       AND t.type = 'CustInvc'
@@ -240,7 +235,6 @@ async function rule6_incompleteAddress() {
         WHERE t.entity = c.id
           AND t.type = 'CustInvc'
           AND t.voided = 'F'
-          AND t.statusRef IN ('open', 'partiallyPaid')
       )
       AND (ca.defaultbilling = 'T' OR ca.defaultshipping = 'T')
   `);
