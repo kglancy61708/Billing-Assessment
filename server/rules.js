@@ -6,22 +6,30 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // Populated at startup via resolveB2BNames(), used read-only during scans
 const b2bNameCache = {};
 
+// Hardcoded fallback for customlist324 (B2B System) — used if SuiteQL query fails
+const B2B_FALLBACK = {
+  '13': 'Brass/New Orleans', '11': 'Coupa Supplier Portal',
+  '22': 'Entrada / Vendor Access', '21': 'FacilGo',
+  '20': 'Greystar Centralized Billing', '17': 'IRT Vendor Portal',
+  '9': 'McKinley', '5': 'Nexus Systems', '2': 'Ops Technology',
+  '23': 'Paymode-x', '24': 'SAP Ariba / Nexus Water Group',
+  '16': 'Service Channel', '19': 'SPS Commerce', '7': 'Vendor Cafe / Yardi PayScan',
+};
+
 async function resolveB2BNames() {
   try {
-    // BUILTIN.DF resolves list field display names — safe to use at startup outside the scan
+    // Query customlist324 directly to get all B2B system options (not just ones in use)
     const rows = await suiteQLAll(`
-      SELECT DISTINCT custentity318, BUILTIN.DF(custentity318) AS b2bname
-      FROM customer
-      WHERE custentity318 IS NOT NULL AND custentity318 != ''
+      SELECT id, name FROM customlist324 WHERE isinactive = 'F' ORDER BY name
     `);
     for (const r of rows) {
-      if (r.custentity318 && r.b2bname) {
-        b2bNameCache[String(r.custentity318)] = r.b2bname;
-      }
+      if (r.id && r.name) b2bNameCache[String(r.id)] = r.name;
     }
-    console.log(`B2B name cache: ${Object.keys(b2bNameCache).length} entries`, b2bNameCache);
+    if (Object.keys(b2bNameCache).length === 0) throw new Error('empty result');
+    console.log(`B2B name cache: ${Object.keys(b2bNameCache).length} entries from customlist324`);
   } catch (err) {
-    console.warn('resolveB2BNames failed (IDs will show instead of names):', err.message);
+    console.warn('resolveB2BNames SuiteQL failed, using fallback list:', err.message);
+    Object.assign(b2bNameCache, B2B_FALLBACK);
   }
 }
 
