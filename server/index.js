@@ -82,9 +82,18 @@ app.get('/api/flags', async (req, res) => {
     for (const [key, review] of Object.entries(reviewMap)) {
       if (activeFlagKeys.has(key)) continue;
       if (review.status === 'open') continue;
-      if (!review.flag_meta) continue;
+      const meta = review.flag_meta || {
+        customerId: review.customer_id,
+        companyName: `Customer ID ${review.customer_id}`,
+        ruleId: review.rule_id,
+        ruleLabel: `Rule ${review.rule_id}`,
+        detail: 'Flag details unavailable — record was reviewed before metadata storage was added.',
+        parentId: review.parent_id || null,
+        parentName: null,
+        fields: {},
+      };
       flags.push({
-        ...review.flag_meta,
+        ...meta,
         netsuiteUrl: getRecordUrl(review.customer_id),
         status: review.status,
         note: review.note || null,
