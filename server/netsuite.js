@@ -129,15 +129,14 @@ async function listCustomersREST(limit = 3) {
   return res.json();
 }
 
-// Post a note to a customer record in NetSuite
-async function createCustomerNote(customerId, title, noteText, retries = 6) {
-  const url = `${getBaseUrl()}/services/rest/record/v1/customernote`;
-  const today = new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+// Post a note to a customer record in NetSuite via custom record type customrecord3018
+async function createCustomerNote(customerId, title, noteText, flagType, retries = 6) {
+  const url = `${getBaseUrl()}/services/rest/record/v1/customrecord3018`;
   const body = JSON.stringify({
-    entity: { id: String(customerId) },
-    title,
-    note: noteText,
-    notedate: today,
+    custrecord3601: { id: String(customerId) }, // customer link
+    custrecord3604: title,                       // title/subject
+    custrecord3603: noteText,                    // note text
+    custrecord3605: flagType || '',              // flag type (rule label)
   });
 
   for (let attempt = 0; attempt <= retries; attempt++) {

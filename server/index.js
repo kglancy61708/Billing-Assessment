@@ -155,7 +155,7 @@ app.patch('/api/flags/:customerId/:ruleId', async (req, res) => {
       if (reviewedBy) lines.push(`Reviewed by: ${reviewedBy}`);
       if (note) lines.push(`Note: ${note}`);
       lines.push(`Date: ${new Date().toLocaleDateString('en-US')}`);
-      await createCustomerNote(customerId, title, lines.join('\n'));
+      await createCustomerNote(customerId, title, lines.join('\n'), ruleLabel);
     } catch (err) {
       netsuiteNoteError = err.message;
     }
