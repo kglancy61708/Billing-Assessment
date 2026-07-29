@@ -1,5 +1,10 @@
 const { suiteQLAll, getFieldRefName } = require('./netsuite');
 
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// Cache B2B system names for the lifetime of the server process
+const b2bNameCache = {};
+
 // Rule 1: Sub-account missing custentity310 when at least one sibling has it true
 async function rule1_missingOnlineInvoiceVsSiblings() {
   const rows = await suiteQLAll(`
@@ -40,14 +45,15 @@ async function rule1_missingOnlineInvoiceVsSiblings() {
         AND s.entitystatus = 13
         AND s.custentity310 = 'T'
     `);
-    // Resolve unique custentity318 IDs to display names via REST (one call per unique value)
+    // Resolve unique custentity318 IDs to display names (cached for server lifetime)
     const uniqueB2BIds = [...new Set(siblingRows.map(s => s.custentity318).filter(Boolean))];
-    const b2bNameById = {};
     for (const id of uniqueB2BIds) {
-      const sibling = siblingRows.find(s => s.custentity318 === id);
-      if (sibling) {
-        const name = await getFieldRefName(String(sibling.id), 'custentity318');
-        b2bNameById[id] = name || id;
+      if (!b2bNameCache[id]) {
+        const sibling = siblingRows.find(s => s.custentity318 === id);
+        if (sibling) {
+          const name = await getFieldRefName(String(sibling.id), 'custentity318');
+          b2bNameCache[id] = name || id;
+        }
       }
     }
 
@@ -57,7 +63,7 @@ async function rule1_missingOnlineInvoiceVsSiblings() {
       siblingsByParent[pid].push({
         id: String(s.id),
         companyname: s.companyname,
-        custentity318: s.custentity318 ? (b2bNameById[s.custentity318] || s.custentity318) : null,
+        custentity318: s.custentity318 ? (b2bNameCache[s.custentity318] || s.custentity318) : null,
       });
     }
   }
@@ -344,6 +350,7 @@ async function runAllRules() {
   const errors = [];
 
   for (let i = 0; i < RULES.length; i++) {
+    if (i > 0) await sleep(2000); // give NetSuite's concurrency slot time to clear between rules
     try {
       const result = await RULES[i]();
       flags.push(...result);
