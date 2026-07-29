@@ -258,6 +258,7 @@ async function rule6_incompleteAddress() {
   const rows = await suiteQLAll(`
     SELECT c.id, c.companyname,
            ca.defaultbilling, ca.defaultshipping,
+           a.addressee,
            a.addr1,
            a.city,
            a.state,
@@ -286,6 +287,8 @@ async function rule6_incompleteAddress() {
     }
 
     const missing = [];
+    const isBilling = r.defaultbilling === 'T';
+    if (isBilling && (!r.addressee || r.addressee.trim() === '')) missing.push('Addressee');
     if (!r.addr1 || r.addr1.trim() === '') missing.push('Address 1');
     if (!r.city || r.city.trim() === '') missing.push('City');
     if (!r.state || r.state.trim() === '') missing.push('State');
