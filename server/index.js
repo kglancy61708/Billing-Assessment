@@ -5,7 +5,7 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 
-const { runAllRules } = require('./rules');
+const { runAllRules, resolveB2BNames } = require('./rules');
 const { getRecordUrl, createCustomerNote } = require('./netsuite');
 const {
   upsertReview,
@@ -227,6 +227,8 @@ if (require('fs').existsSync(clientDist)) {
 
 app.listen(PORT, () => {
   console.log(`Billing Assessment server running on port ${PORT}`);
-  // Auto-run first scan on startup
-  runScan().catch(console.error);
+  // Resolve B2B display names first, then run the initial scan
+  resolveB2BNames()
+    .catch(console.error)
+    .finally(() => runScan().catch(console.error));
 });

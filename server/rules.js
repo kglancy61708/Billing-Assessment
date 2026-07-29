@@ -3,7 +3,32 @@ const { suiteQLAll, getFieldRefName } = require('./netsuite');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // Cache B2B system names for the lifetime of the server process
+// Populated at startup via resolveB2BNames(), used read-only during scans
 const b2bNameCache = {};
+
+async function resolveB2BNames() {
+  try {
+    const rows = await suiteQLAll(`
+      SELECT DISTINCT custentity318
+      FROM customer
+      WHERE custentity318 IS NOT NULL AND custentity318 != ''
+    `);
+    const uniqueIds = rows.map(r => r.custentity318).filter(Boolean);
+    // Find one customer per unique ID to resolve the display name via REST
+    for (const id of uniqueIds) {
+      if (b2bNameCache[id]) continue;
+      try {
+        const sample = await suiteQLAll(`
+          SELECT id FROM customer WHERE custentity318 = '${id}' AND rownum <= 1
+        `);
+        if (sample.length > 0) {
+          const name = await getFieldRefName(String(sample[0].id), 'custentity318');
+          if (name) b2bNameCache[id] = name;
+        }
+      } catch (_) { /* non-fatal */ }
+    }
+  } catch (_) { /* non-fatal — names just won't resolve */ }
+}
 
 // Rule 1: Sub-account missing custentity310 when at least one sibling has it true
 async function rule1_missingOnlineInvoiceVsSiblings() {
@@ -45,18 +70,6 @@ async function rule1_missingOnlineInvoiceVsSiblings() {
         AND s.entitystatus = 13
         AND s.custentity310 = 'T'
     `);
-    // Resolve unique custentity318 IDs to display names (cached for server lifetime)
-    const uniqueB2BIds = [...new Set(siblingRows.map(s => s.custentity318).filter(Boolean))];
-    for (const id of uniqueB2BIds) {
-      if (!b2bNameCache[id]) {
-        const sibling = siblingRows.find(s => s.custentity318 === id);
-        if (sibling) {
-          const name = await getFieldRefName(String(sibling.id), 'custentity318');
-          b2bNameCache[id] = name || id;
-        }
-      }
-    }
-
     for (const s of siblingRows) {
       const pid = String(s.parent);
       if (!siblingsByParent[pid]) siblingsByParent[pid] = [];
@@ -378,4 +391,4 @@ async function runAllRules() {
   return { flags, errors };
 }
 
-module.exports = { runAllRules, RULES };
+module.exports = { runAllRules, RULES, resolveB2BNames };
