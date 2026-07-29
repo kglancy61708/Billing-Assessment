@@ -6,7 +6,7 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 const { runAllRules } = require('./rules');
-const { getRecordUrl } = require('./netsuite');
+const { getRecordUrl, createCustomerNote } = require('./netsuite');
 const {
   upsertReview,
   getReviewMap,
@@ -58,13 +58,22 @@ app.get('/api/flags', async (req, res) => {
     const flags = cachedResult.flags.map(f => {
       const key = `${f.customerId}:${f.ruleId}`;
       const review = reviewMap[key];
+
+      // If the account moved to a different parent since it was reviewed/dismissed, treat as open again
+      const parentChanged = review?.parent_id != null &&
+        f.parentId != null &&
+        String(review.parent_id) !== String(f.parentId);
+
+      const effectiveStatus = (!review || parentChanged) ? 'open' : review.status;
+
       return {
         ...f,
         netsuiteUrl: getRecordUrl(f.customerId),
-        status: review?.status || 'open',
-        note: review?.note || null,
-        reviewedBy: review?.reviewed_by || null,
-        reviewedAt: review?.reviewed_at || null,
+        status: effectiveStatus,
+        note: parentChanged ? null : (review?.note || null),
+        reviewedBy: parentChanged ? null : (review?.reviewed_by || null),
+        reviewedAt: parentChanged ? null : (review?.reviewed_at || null),
+        parentChanged: parentChanged || false,
       };
     });
 
@@ -107,17 +116,34 @@ app.get('/api/scan/status', (req, res) => {
 });
 
 // PATCH /api/flags/:customerId/:ruleId — mark reviewed or dismissed
-app.patch('/api/flags/:customerId/:ruleId', (req, res) => {
+app.patch('/api/flags/:customerId/:ruleId', async (req, res) => {
   const { customerId, ruleId } = req.params;
-  const { status, note, reviewedBy } = req.body;
+  const { status, note, reviewedBy, parentId, addToNetSuite, companyName, ruleLabel } = req.body;
 
   const valid = ['open', 'reviewed', 'dismissed'];
   if (!valid.includes(status)) {
     return res.status(400).json({ error: `status must be one of: ${valid.join(', ')}` });
   }
 
-  upsertReview({ customerId, ruleId: Number(ruleId), status, note, reviewedBy });
-  res.json({ success: true, customerId, ruleId, status });
+  upsertReview({ customerId, ruleId: Number(ruleId), status, note, reviewedBy, parentId });
+
+  // Write note to NetSuite if requested
+  let netsuiteNoteError = null;
+  if (addToNetSuite && status !== 'open') {
+    try {
+      const actionLabel = status === 'reviewed' ? 'Reviewed' : 'Dismissed';
+      const title = `[Billing Assessment] Rule ${ruleId} – ${ruleLabel || ''} — ${actionLabel}`;
+      const lines = [`Action: ${actionLabel}`, `Rule ${ruleId}: ${ruleLabel || ''}`];
+      if (reviewedBy) lines.push(`Reviewed by: ${reviewedBy}`);
+      if (note) lines.push(`Note: ${note}`);
+      lines.push(`Date: ${new Date().toLocaleDateString('en-US')}`);
+      await createCustomerNote(customerId, title, lines.join('\n'));
+    } catch (err) {
+      netsuiteNoteError = err.message;
+    }
+  }
+
+  res.json({ success: true, customerId, ruleId, status, netsuiteNoteError });
 });
 
 // GET /api/credentials — shows masked credential values to verify Railway vars are set

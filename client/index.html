@@ -380,11 +380,17 @@ function renderCard(f) {
             <textarea class="form-textarea" id="${id}-note" rows="2" placeholder="Add a note about this flag…">${f.note||''}</textarea>
           </div>
           ${f.reviewedAt ? `<p class="reviewed-info">Last updated ${new Date(f.reviewedAt).toLocaleString()}${f.reviewedBy?' by '+f.reviewedBy:''}</p>`:''}
+          ${f.parentChanged ? `<p class="reviewed-info" style="color:#b45309">⚠ Parent account changed — reopened for review.</p>` : ''}
+          <div class="form-row" style="flex-direction:row;align-items:center;gap:8px;margin-bottom:10px">
+            <input type="checkbox" id="${id}-ns-note" checked style="width:16px;height:16px;cursor:pointer" />
+            <label for="${id}-ns-note" style="font-size:12px;color:#374151;cursor:pointer;font-weight:500">Add note to NetSuite customer record</label>
+          </div>
           <div class="actions">
-            <button class="action-btn btn-reviewed" onclick="saveFlag('${f.customerId}',${f.ruleId},'reviewed','${id}')">Mark Reviewed</button>
-            <button class="action-btn btn-dismiss"  onclick="saveFlag('${f.customerId}',${f.ruleId},'dismissed','${id}')">Dismiss</button>
-            ${f.status!=='open'?`<button class="action-btn btn-reopen" onclick="saveFlag('${f.customerId}',${f.ruleId},'open','${id}')">Re-open</button>`:''}
+            <button class="action-btn btn-reviewed" onclick="saveFlag('${f.customerId}',${f.ruleId},'reviewed','${id}',${f.parentId||'null'},'${(f.ruleLabel||'').replace(/'/g,"\\'")}')">Mark Reviewed</button>
+            <button class="action-btn btn-dismiss"  onclick="saveFlag('${f.customerId}',${f.ruleId},'dismissed','${id}',${f.parentId||'null'},'${(f.ruleLabel||'').replace(/'/g,"\\'")}')">Dismiss</button>
+            ${f.status!=='open'?`<button class="action-btn btn-reopen" onclick="saveFlag('${f.customerId}',${f.ruleId},'open','${id}',${f.parentId||'null'},'${(f.ruleLabel||'').replace(/'/g,"\\'")}')">Re-open</button>`:''}
             <span class="saved-toast" id="${id}-toast">Saved ✓</span>
+            <span class="saved-toast" id="${id}-ns-toast" style="background:#dbeafe;color:#1e40af"></span>
           </div>
         </div>
       </div>
@@ -419,21 +425,37 @@ function toggleCard(id) {
   chev.textContent = open ? '▾' : '▸';
 }
 
-async function saveFlag(customerId, ruleId, status, cardId) {
+async function saveFlag(customerId, ruleId, status, cardId, parentId, ruleLabel) {
   const note = document.getElementById(cardId+'-note')?.value || null;
   const reviewedBy = document.getElementById(cardId+'-reviewer')?.value || null;
+  const addToNetSuite = status !== 'open' && (document.getElementById(cardId+'-ns-note')?.checked !== false);
 
   try {
-    await fetch(`/api/flags/${customerId}/${ruleId}`, {
+    const flag = flags.find(f => String(f.customerId)===String(customerId) && f.ruleId===ruleId);
+    const result = await fetch(`/api/flags/${customerId}/${ruleId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, note, reviewedBy }),
-    });
-    const flag = flags.find(f => String(f.customerId)===String(customerId) && f.ruleId===ruleId);
+      body: JSON.stringify({ status, note, reviewedBy, parentId, addToNetSuite, companyName: flag?.companyName, ruleLabel }),
+    }).then(r => r.json());
+
     if (flag) { flag.status = status; flag.note = note; flag.reviewedBy = reviewedBy; flag.reviewedAt = new Date().toISOString(); }
+
     const toast = document.getElementById(cardId+'-toast');
-    if (toast) { toast.classList.add('show'); }
-    setTimeout(() => renderAll(), 600);
+    if (toast) { toast.textContent = 'Saved ✓'; toast.classList.add('show'); }
+
+    const nsToast = document.getElementById(cardId+'-ns-toast');
+    if (nsToast && addToNetSuite) {
+      if (result.netsuiteNoteError) {
+        nsToast.textContent = '⚠ NetSuite note failed';
+        nsToast.style.background = '#fef2f2';
+        nsToast.style.color = '#b91c1c';
+      } else {
+        nsToast.textContent = 'Note added to NetSuite ✓';
+      }
+      nsToast.classList.add('show');
+    }
+
+    setTimeout(() => renderAll(), 1200);
   } catch(err) {
     alert('Failed to save: ' + err.message);
   }

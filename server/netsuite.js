@@ -129,4 +129,37 @@ async function listCustomersREST(limit = 3) {
   return res.json();
 }
 
-module.exports = { suiteQL, suiteQLAll, updateCustomer, getRecordUrl, listCustomersREST };
+// Post a note to a customer record in NetSuite
+async function createCustomerNote(customerId, title, noteText) {
+  const url = `${getBaseUrl()}/services/rest/record/v1/note`;
+  const oauth = getOAuth();
+  const token = { key: NS_TOKEN_ID, secret: NS_TOKEN_SECRET };
+
+  const authData = oauth.authorize({ url, method: 'POST' }, token);
+  const authHeader = oauth.toHeader(authData);
+  authHeader.Authorization = authHeader.Authorization.replace(
+    'OAuth ', `OAuth realm="${NS_ACCOUNT_ID.toUpperCase()}",`
+  );
+
+  const today = new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { ...authHeader, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      entity: { id: String(customerId) },
+      title,
+      note: noteText,
+      notedate: today,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`NetSuite note error ${res.status}: ${text}`);
+  }
+
+  return res.status === 204 ? { success: true } : res.json();
+}
+
+module.exports = { suiteQL, suiteQLAll, updateCustomer, getRecordUrl, listCustomersREST, createCustomerNote };

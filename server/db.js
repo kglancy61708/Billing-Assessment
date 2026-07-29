@@ -16,8 +16,8 @@ function writeJSON(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
 }
 
-// reviews: { "customerId:ruleId": { customer_id, rule_id, status, note, reviewed_by, reviewed_at } }
-function upsertReview({ customerId, ruleId, status, note, reviewedBy }) {
+// reviews: { "customerId:ruleId": { customer_id, rule_id, status, note, reviewed_by, reviewed_at, parent_id } }
+function upsertReview({ customerId, ruleId, status, note, reviewedBy, parentId }) {
   const reviews = readJSON(REVIEWS_FILE, {});
   const key = `${customerId}:${ruleId}`;
   reviews[key] = {
@@ -27,6 +27,7 @@ function upsertReview({ customerId, ruleId, status, note, reviewedBy }) {
     note: note || null,
     reviewed_by: reviewedBy || null,
     reviewed_at: new Date().toISOString(),
+    parent_id: parentId ? String(parentId) : null,
   };
   writeJSON(REVIEWS_FILE, reviews);
 }
