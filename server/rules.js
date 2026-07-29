@@ -33,7 +33,8 @@ async function rule1_missingOnlineInvoiceVsSiblings() {
   const siblingsByParent = {};
   if (parentIds.length > 0) {
     const siblingRows = await suiteQLAll(`
-      SELECT s.id, s.parent, s.companyname, s.custentity318
+      SELECT s.id, s.parent, s.companyname, s.custentity318,
+             BUILTIN.DF(s.custentity318) AS custentity318name
       FROM customer s
       WHERE s.parent IN (${parentIds.join(',')})
         AND s.isinactive = 'F'
@@ -46,7 +47,7 @@ async function rule1_missingOnlineInvoiceVsSiblings() {
       siblingsByParent[pid].push({
         id: String(s.id),
         companyname: s.companyname,
-        custentity318: s.custentity318 || null,
+        custentity318: s.custentity318name || s.custentity318 || null,
       });
     }
   }

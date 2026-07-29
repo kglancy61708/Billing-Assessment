@@ -27,7 +27,7 @@ function getBaseUrl() {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function suiteQL(query, limit = 1000, offset = 0, retries = 4) {
+async function suiteQL(query, limit = 1000, offset = 0, retries = 6) {
   const url = `${getBaseUrl()}/services/rest/query/v1/suiteql?limit=${limit}&offset=${offset}`;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -46,7 +46,7 @@ async function suiteQL(query, limit = 1000, offset = 0, retries = 4) {
     });
 
     if (res.status === 429 && attempt < retries) {
-      await sleep(3000 * (attempt + 1)); // 3s, 6s, 9s, 12s
+      await sleep(5000 * (attempt + 1)); // 5s, 10s, 15s, 20s, 25s
       continue;
     }
 
