@@ -25,34 +25,38 @@ function getBaseUrl() {
   return `https://${acct}.suitetalk.api.netsuite.com`;
 }
 
-async function suiteQL(query, limit = 1000, offset = 0) {
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function suiteQL(query, limit = 1000, offset = 0, retries = 4) {
   const url = `${getBaseUrl()}/services/rest/query/v1/suiteql?limit=${limit}&offset=${offset}`;
-  const oauth = getOAuth();
-  const token = { key: NS_TOKEN_ID, secret: NS_TOKEN_SECRET };
 
-  const authData = oauth.authorize({ url, method: 'POST' }, token);
-  const authHeader = oauth.toHeader(authData);
-  // NetSuite requires the realm (account ID uppercase) in the Authorization header
-  authHeader.Authorization = authHeader.Authorization.replace(
-    'OAuth ', `OAuth realm="${NS_ACCOUNT_ID.toUpperCase()}",`
-  );
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const oauth = getOAuth();
+    const token = { key: NS_TOKEN_ID, secret: NS_TOKEN_SECRET };
+    const authData = oauth.authorize({ url, method: 'POST' }, token);
+    const authHeader = oauth.toHeader(authData);
+    authHeader.Authorization = authHeader.Authorization.replace(
+      'OAuth ', `OAuth realm="${NS_ACCOUNT_ID.toUpperCase()}",`
+    );
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      ...authHeader,
-      'Content-Type': 'application/json',
-      prefer: 'transient',
-    },
-    body: JSON.stringify({ q: query }),
-  });
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { ...authHeader, 'Content-Type': 'application/json', prefer: 'transient' },
+      body: JSON.stringify({ q: query }),
+    });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`NetSuite SuiteQL error ${res.status}: ${text}`);
+    if (res.status === 429 && attempt < retries) {
+      await sleep(3000 * (attempt + 1)); // 3s, 6s, 9s, 12s
+      continue;
+    }
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`NetSuite SuiteQL error ${res.status}: ${text}`);
+    }
+
+    return res.json();
   }
-
-  return res.json();
 }
 
 // Paginate through all results automatically
