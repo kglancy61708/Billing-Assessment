@@ -27,30 +27,33 @@ async function rule1_missingOnlineInvoiceVsSiblings() {
       )
   `);
 
-  // Fetch B2B System (custentity318) values from siblings that have Online Invoice Service enabled
+  // Fetch sibling accounts that have Online Invoice Service enabled (the "compared" siblings)
   const parentIds = [...new Set(rows.map(r => r.parent).filter(Boolean))];
-  const siblingB2B = {};
+  // Map: parentId -> array of { id, companyname, custentity318 }
+  const siblingsByParent = {};
   if (parentIds.length > 0) {
     const siblingRows = await suiteQLAll(`
-      SELECT s.parent, s.custentity318
+      SELECT s.id, s.parent, s.companyname, s.custentity318
       FROM customer s
       WHERE s.parent IN (${parentIds.join(',')})
         AND s.isinactive = 'F'
         AND s.entitystatus = 13
         AND s.custentity310 = 'T'
-        AND s.custentity318 IS NOT NULL
-        AND s.custentity318 != ''
     `);
     for (const s of siblingRows) {
       const pid = String(s.parent);
-      if (!siblingB2B[pid]) siblingB2B[pid] = new Set();
-      siblingB2B[pid].add(s.custentity318);
+      if (!siblingsByParent[pid]) siblingsByParent[pid] = [];
+      siblingsByParent[pid].push({
+        id: String(s.id),
+        companyname: s.companyname,
+        custentity318: s.custentity318 || null,
+      });
     }
   }
 
   return rows.map(r => {
     const pid = r.parent ? String(r.parent) : null;
-    const b2bSystems = pid && siblingB2B[pid] ? [...siblingB2B[pid]] : [];
+    const siblings = pid && siblingsByParent[pid] ? siblingsByParent[pid] : [];
     return {
       customerId: String(r.id),
       companyName: r.companyname,
@@ -58,7 +61,7 @@ async function rule1_missingOnlineInvoiceVsSiblings() {
       ruleId: 1,
       ruleLabel: 'Missing Online Invoice Service (vs. siblings)',
       detail: 'One or more sibling sub-accounts have Customer has Online Invoice Service (custentity310) checked, but this account does not.',
-      fields: { custentity310: r.custentity310, siblingB2BSystems: b2bSystems },
+      fields: { custentity310: r.custentity310, onlineInvoiceSiblings: siblings },
     };
   });
 }

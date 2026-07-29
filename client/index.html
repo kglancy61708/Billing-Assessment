@@ -315,14 +315,17 @@ function renderFieldDetails(f) {
   if (!fields) return '';
 
   if (ruleId===1) {
-    const b2b = fields.siblingB2BSystems || [];
-    const b2bHtml = b2b.length
-      ? b2b.map(v=>`<div class="field-row"><span class="field-val">${v}</span></div>`).join('')
-      : `<div class="field-row" style="color:#888;font-style:italic">None on file (custentity318 is blank on all Online Invoice Service siblings)</div>`;
+    const siblings = fields.onlineInvoiceSiblings || [];
+    const NS_BASE = `https://${window.__NS_ACCOUNT_ID__ || ''}.app.netsuite.com`;
+    const sibHtml = siblings.length
+      ? siblings.map(s => {
+          const b2b = s.custentity318 ? `<span style="color:#555;margin-left:8px">(B2B System: ${s.custentity318})</span>` : `<span style="color:#aaa;margin-left:8px;font-style:italic">(custentity318 not set)</span>`;
+          return `<div class="field-row"><a href="https://system.netsuite.com/app/common/entity/custjob.nl?id=${s.id}" target="_blank" style="color:#2563eb">${s.companyname}</a>${b2b}</div>`;
+        }).join('')
+      : `<div class="field-row" style="color:#888;font-style:italic">No siblings with Online Invoice Service found</div>`;
     return `<div class="field-box">
-      <div class="field-row"><span class="field-label">custentity310 (this account)</span><span class="field-val">${fields.custentity310 ?? '(null)'}</span></div>
-      <div style="font-weight:600;margin:8px 0 6px">B2B System(s) on sibling accounts (custentity318):</div>
-      ${b2bHtml}
+      <div style="font-weight:600;margin-bottom:6px">Sibling accounts with Online Invoice Service enabled:</div>
+      ${sibHtml}
     </div>`;
   }
 
@@ -438,9 +441,16 @@ function toggleCard(id) {
 }
 
 async function saveFlag(customerId, ruleId, status, cardId, parentId, ruleLabel) {
-  const note = document.getElementById(cardId+'-note')?.value || null;
+  const noteEl = document.getElementById(cardId+'-note');
+  const note = noteEl?.value?.trim() || null;
   const reviewedBy = document.getElementById(cardId+'-reviewer')?.value || null;
   const addToNetSuite = status !== 'open' && (document.getElementById(cardId+'-ns-note')?.checked !== false);
+
+  if (status === 'dismissed' && !note) {
+    if (noteEl) { noteEl.style.borderColor = '#ef4444'; noteEl.placeholder = 'Note is required when dismissing'; noteEl.focus(); }
+    return;
+  }
+  if (noteEl) noteEl.style.borderColor = '';
 
   try {
     const flag = flags.find(f => String(f.customerId)===String(customerId) && f.ruleId===ruleId);
