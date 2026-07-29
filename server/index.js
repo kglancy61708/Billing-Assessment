@@ -5,8 +5,8 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 
-const { runAllRules, resolveB2BNames } = require('./rules');
-const { getRecordUrl, createCustomerNote } = require('./netsuite');
+const { runAllRules, resolveB2BNames, getB2BCache } = require('./rules');
+const { getRecordUrl, createCustomerNote, getCustomerFields, updateCustomer, updateTransaction, updateCustomerAddress } = require('./netsuite');
 const {
   upsertReview,
   getReviewMap,
@@ -41,6 +41,69 @@ async function runScan() {
     scanning = false;
   }
 }
+
+// GET /api/customer/:id/fields?fields=f1,f2,...
+app.get('/api/customer/:id/fields', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { fields } = req.query;
+    if (!fields) return res.status(400).json({ error: 'fields query param required' });
+    const data = await getCustomerFields(id, fields);
+    res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/customer/:id — update customer fields
+app.patch('/api/customer/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { fields } = req.body;
+    if (!fields) return res.status(400).json({ error: 'body.fields required' });
+    const result = await updateCustomer(id, fields);
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/transaction/:id — update invoice fields
+app.patch('/api/transaction/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { fields } = req.body;
+    if (!fields) return res.status(400).json({ error: 'body.fields required' });
+    const result = await updateTransaction(id, fields);
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/customer/:id/address/:addressbookId
+app.patch('/api/customer/:id/address/:addressbookId', async (req, res) => {
+  try {
+    const { id, addressbookId } = req.params;
+    const { fields } = req.body;
+    if (!fields) return res.status(400).json({ error: 'body.fields required' });
+    const result = await updateCustomerAddress(id, addressbookId, fields);
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/b2bsystems — return B2B system options from rules module cache
+app.get('/api/b2bsystems', (req, res) => {
+  const cache = getB2BCache();
+  const systems = Object.entries(cache).map(([id, name]) => ({ id, name }));
+  res.json(systems);
+});
 
 // GET /api/flags — return flags merged with review state
 app.get('/api/flags', async (req, res) => {

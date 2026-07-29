@@ -94,7 +94,9 @@ async function rule1_missingOnlineInvoiceVsSiblings() {
 // Rule 2: None of the three billing delivery methods are enabled
 async function rule2_noDeliveryMethodSet() {
   const rows = await suiteQLAll(`
-    SELECT c.id, c.companyname, c.printtransactions, c.custentity264, c.custentity310
+    SELECT c.id, c.companyname, c.printtransactions, c.custentity264, c.custentity310,
+           c.custentity571, c.custentity594, c.email, c.custentity562, c.custentity563,
+           c.custentity531, c.custentity532
     FROM customer c
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
@@ -124,6 +126,13 @@ async function rule2_noDeliveryMethodSet() {
       printtransactions: r.printtransactions,
       custentity264: r.custentity264,
       custentity310: r.custentity310,
+      custentity571: r.custentity571,
+      custentity594: r.custentity594,
+      email: r.email,
+      custentity562: r.custentity562,
+      custentity563: r.custentity563,
+      custentity531: r.custentity531,
+      custentity532: r.custentity532,
     },
   }));
 }
@@ -131,7 +140,7 @@ async function rule2_noDeliveryMethodSet() {
 // Rule 3: Invoices to Email is true but no email address on file
 async function rule3_emailFlagNoAddress() {
   const rows = await suiteQLAll(`
-    SELECT c.id, c.companyname, c.email
+    SELECT c.id, c.companyname, c.email, c.custentity264, c.custentity562, c.custentity563
     FROM customer c
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
@@ -154,7 +163,7 @@ async function rule3_emailFlagNoAddress() {
     ruleId: 3,
     ruleLabel: 'Invoices to Email — No Email Address',
     detail: '"Invoices to Email" (custentity264) is enabled but the Email field is empty.',
-    fields: { email: r.email },
+    fields: { email: r.email, custentity264: r.custentity264, custentity562: r.custentity562, custentity563: r.custentity563 },
   }));
 }
 
@@ -216,7 +225,12 @@ async function rule4_emailDomainMismatch() {
           ruleId: 4,
           ruleLabel: 'Email Domain Mismatch vs. Siblings',
           detail: `Email domain "@${domain}" differs from the majority domain "@${majorityDomain}" used by sibling sub-accounts under the same parent.`,
-          fields: { email: r.email, expectedDomain: majorityDomain },
+          fields: {
+            email: r.email,
+            expectedDomain: majorityDomain,
+            siblingEmails: siblings.filter(s => String(s.id) !== String(r.id) && s.email)
+              .map(s => ({ id: String(s.id), companyname: s.companyname, email: s.email })),
+          },
         });
       }
     }
@@ -228,7 +242,8 @@ async function rule4_emailDomainMismatch() {
 // Rule 5: PO required but open invoices have no PO number
 async function rule5_poRequiredMissing() {
   const rows = await suiteQLAll(`
-    SELECT DISTINCT c.id, c.companyname, t.id AS transactionid, t.tranid, t.otherrefnum, t.trandate
+    SELECT DISTINCT c.id, c.companyname, c.custentity_po_required,
+                    t.id AS transactionid, t.tranid, t.otherrefnum, t.trandate
     FROM customer c
     JOIN transaction t ON t.entity = c.id
     WHERE c.isinactive = 'F'
@@ -256,12 +271,13 @@ async function rule5_poRequiredMissing() {
   for (const r of rows) {
     const cid = String(r.id);
     if (!byCustomer[cid]) {
-      byCustomer[cid] = { id: r.id, companyname: r.companyname, invoices: [] };
+      byCustomer[cid] = { id: r.id, companyname: r.companyname, custentity_po_required: r.custentity_po_required, invoices: [] };
     }
     byCustomer[cid].invoices.push({
       transactionId: String(r.transactionid),
       tranId: r.tranid,
       tranDate: r.trandate,
+      otherrefnum: r.otherrefnum || '',
     });
   }
 
@@ -272,7 +288,7 @@ async function rule5_poRequiredMissing() {
     ruleId: 5,
     ruleLabel: 'PO Required — Invoices Missing PO#',
     detail: `Customer requires a PO but ${c.invoices.length} invoice(s) have no PO# (otherrefnum).`,
-    fields: { invoiceCount: c.invoices.length, invoices: c.invoices.slice(0, 10) },
+    fields: { invoiceCount: c.invoices.length, invoices: c.invoices.slice(0, 10), custentity_po_required: c.custentity_po_required },
   }));
 }
 
@@ -282,7 +298,9 @@ async function rule6_incompleteAddress() {
   const rows = await suiteQLAll(`
     SELECT c.id, c.companyname,
            ca.defaultbilling, ca.defaultshipping,
+           ca.id AS addressbookid,
            a.addressee,
+           a.attention,
            a.addr1,
            a.city,
            a.state,
@@ -313,6 +331,7 @@ async function rule6_incompleteAddress() {
     const missing = [];
     const isBilling = r.defaultbilling === 'T';
     if (isBilling && (!r.addressee || r.addressee.trim() === '')) missing.push('Addressee');
+    if (isBilling && (!r.attention || r.attention.trim() === '')) missing.push('Attention');
     if (!r.addr1 || r.addr1.trim() === '') missing.push('Address 1');
     if (!r.city || r.city.trim() === '') missing.push('City');
     if (!r.state || r.state.trim() === '') missing.push('State');
@@ -322,7 +341,17 @@ async function rule6_incompleteAddress() {
       const type = r.defaultbilling === 'T' && r.defaultshipping === 'T'
         ? 'billing & shipping'
         : r.defaultbilling === 'T' ? 'billing' : 'shipping';
-      byCustomer[cid].addresses.push({ type, missingFields: missing });
+      byCustomer[cid].addresses.push({
+        type,
+        missingFields: missing,
+        addressbookid: String(r.addressbookid),
+        addressee: r.addressee || '',
+        attention: r.attention || '',
+        addr1: r.addr1 || '',
+        city: r.city || '',
+        state: r.state || '',
+        zip: r.zip || '',
+      });
     }
   }
 
@@ -386,4 +415,6 @@ async function runAllRules() {
   return { flags, errors };
 }
 
-module.exports = { runAllRules, RULES, resolveB2BNames };
+function getB2BCache() { return b2bNameCache; }
+
+module.exports = { runAllRules, RULES, resolveB2BNames, getB2BCache };

@@ -104,6 +104,107 @@ async function updateCustomer(customerId, fields) {
   return res.status === 204 ? { success: true } : res.json();
 }
 
+// Fetch specific fields from a customer record
+async function getCustomerFields(customerId, fieldList, retries = 6) {
+  const fields = Array.isArray(fieldList) ? fieldList.join(',') : fieldList;
+  const url = `${getBaseUrl()}/services/rest/record/v1/customer/${customerId}?fields=${fields}`;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const oauth = getOAuth();
+    const token = { key: NS_TOKEN_ID, secret: NS_TOKEN_SECRET };
+    const authData = oauth.authorize({ url, method: 'GET' }, token);
+    const authHeader = oauth.toHeader(authData);
+    authHeader.Authorization = authHeader.Authorization.replace(
+      'OAuth ', `OAuth realm="${NS_ACCOUNT_ID.toUpperCase()}",`
+    );
+
+    const res = await fetch(url, { method: 'GET', headers: authHeader });
+
+    if (res.status === 429 && attempt < retries) {
+      await sleep(5000 * (attempt + 1));
+      continue;
+    }
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`NetSuite getCustomerFields error ${res.status}: ${text}`);
+    }
+
+    return res.json();
+  }
+}
+
+// Update an invoice/transaction record
+async function updateTransaction(transactionId, fields, retries = 6) {
+  const url = `${getBaseUrl()}/services/rest/record/v1/invoice/${transactionId}`;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const oauth = getOAuth();
+    const token = { key: NS_TOKEN_ID, secret: NS_TOKEN_SECRET };
+    const authData = oauth.authorize({ url, method: 'PATCH' }, token);
+    const authHeader = oauth.toHeader(authData);
+    authHeader.Authorization = authHeader.Authorization.replace(
+      'OAuth ', `OAuth realm="${NS_ACCOUNT_ID.toUpperCase()}",`
+    );
+
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: { ...authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify(fields),
+    });
+
+    if (res.status === 429 && attempt < retries) {
+      await sleep(5000 * (attempt + 1));
+      continue;
+    }
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`NetSuite updateTransaction error ${res.status}: ${text}`);
+    }
+
+    return res.status === 204 ? { success: true } : res.json();
+  }
+}
+
+// Update a customer address book entry
+async function updateCustomerAddress(customerId, addressbookId, addressFields, retries = 6) {
+  const url = `${getBaseUrl()}/services/rest/record/v1/customer/${customerId}`;
+  const payload = {
+    addressbook: {
+      items: [{ id: String(addressbookId), addressbookaddress: addressFields }],
+    },
+  };
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const oauth = getOAuth();
+    const token = { key: NS_TOKEN_ID, secret: NS_TOKEN_SECRET };
+    const authData = oauth.authorize({ url, method: 'PATCH' }, token);
+    const authHeader = oauth.toHeader(authData);
+    authHeader.Authorization = authHeader.Authorization.replace(
+      'OAuth ', `OAuth realm="${NS_ACCOUNT_ID.toUpperCase()}",`
+    );
+
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: { ...authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (res.status === 429 && attempt < retries) {
+      await sleep(5000 * (attempt + 1));
+      continue;
+    }
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`NetSuite updateCustomerAddress error ${res.status}: ${text}`);
+    }
+
+    return res.status === 204 ? { success: true } : res.json();
+  }
+}
+
 function getRecordUrl(customerId) {
   const acct = NS_ACCOUNT_ID.replace(/_/g, '-').toLowerCase();
   return `https://${acct}.app.netsuite.com/app/common/entity/custjob.nl?id=${customerId}`;
@@ -193,4 +294,4 @@ async function getFieldRefName(customerId, fieldName) {
   return val.refName || val.name || null;
 }
 
-module.exports = { suiteQL, suiteQLAll, updateCustomer, getRecordUrl, listCustomersREST, createCustomerNote, getFieldRefName };
+module.exports = { suiteQL, suiteQLAll, updateCustomer, getRecordUrl, listCustomersREST, createCustomerNote, getFieldRefName, getCustomerFields, updateTransaction, updateCustomerAddress };

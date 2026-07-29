@@ -153,6 +153,37 @@
     .parent-group-body .card { border-radius:0; margin-bottom:0; border-bottom:1px solid #f0f0f0; box-shadow:none; }
     .parent-group-body .card:last-child { border-bottom:none; }
     .parent-group-body.collapsed { display:none; }
+
+    /* Edit panels */
+    .edit-panel { border-top:1px solid #e5e7eb; margin-top:14px; padding-top:14px; }
+    .edit-panel-header { font-weight:700; font-size:13px; color:#374151; margin-bottom:10px; }
+    .edit-section { margin-bottom:14px; }
+    .edit-section-label { font-size:11px; font-weight:700; text-transform:uppercase; color:#6b7280; letter-spacing:.05em; margin-bottom:6px; }
+    .edit-row { display:flex; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap; }
+    .edit-row label { font-size:12px; color:#374151; min-width:140px; }
+    .edit-input {
+      border:1px solid #d1d5db; border-radius:5px; padding:5px 9px;
+      font-size:13px; outline:none; font:inherit; max-width:280px; width:100%;
+    }
+    .edit-input:focus { border-color:#1a56db; }
+    .edit-select {
+      border:1px solid #d1d5db; border-radius:5px; padding:5px 9px;
+      font-size:13px; outline:none; font:inherit; max-width:280px; width:100%; background:#fff;
+    }
+    .edit-checkbox { width:16px; height:16px; cursor:pointer; }
+    .btn-save-ns {
+      background:#1a56db; color:#fff; padding:6px 14px; border-radius:6px;
+      font-weight:600; font-size:12px; margin-top:4px;
+    }
+    .btn-save-ns:hover { background:#1649c0; }
+    .edit-status { font-size:12px; margin-left:10px; }
+    .edit-status.ok { color:#065f46; }
+    .edit-status.err { color:#b91c1c; }
+    .edit-loading { font-size:12px; color:#6b7280; font-style:italic; padding:6px 0; }
+    .sibling-emails-list { font-size:13px; color:#374151; margin-bottom:8px; }
+    .sibling-emails-list li { list-style:none; padding:2px 0; font-family:monospace; }
+    .invoice-edit-row { display:flex; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap; }
+    .invoice-edit-row .inv-label { font-size:12px; color:#6b7280; min-width:200px; }
   </style>
 </head>
 <body>
@@ -163,6 +194,370 @@
 
 <script>
 const RULE_COLORS = { 1:'#dbeafe', 2:'#fce7f3', 3:'#ffedd5', 4:'#ede9fe', 5:'#fef9c3', 6:'#dcfce7' };
+
+const FIELD_LABELS = {
+  printtransactions: 'Print Transactions',
+  custentity264: 'Invoices to Email',
+  custentity310: 'Online Invoice Service',
+  custentity562: 'Invoice Email #1',
+  custentity563: 'Invoice Email #2',
+  custentity594: 'Print Statements',
+  custentity571: 'Statements to Email',
+  custentity531: 'Statement Email #1',
+  custentity532: 'Statement Email #2',
+  email: 'Email',
+  custentity_po_required: 'PO Required',
+  otherrefnum: 'PO Number',
+};
+
+// Cache for B2B systems fetched from server
+let b2bSystemsCache = null;
+
+function parseBool(v) {
+  if (v === true || v === 'T') return true;
+  if (v === false || v === 'F') return false;
+  return null;
+}
+
+function boolChecked(v) { return parseBool(v) === true; }
+
+function editStatusSpan(id) {
+  return `<span class="edit-status" id="${id}-estatus"></span>`;
+}
+
+function setEditStatus(id, ok, msg) {
+  const el = document.getElementById(id + '-estatus');
+  if (!el) return;
+  el.textContent = ok ? ('✓ ' + (msg || 'Saved')) : ('✗ ' + (msg || 'Error'));
+  el.className = 'edit-status ' + (ok ? 'ok' : 'err');
+}
+
+async function fetchB2BSystems() {
+  if (b2bSystemsCache) return b2bSystemsCache;
+  try {
+    b2bSystemsCache = await fetch('/api/b2bsystems').then(r => r.json());
+  } catch(e) { b2bSystemsCache = []; }
+  return b2bSystemsCache;
+}
+
+// Lazy-load customer fields; cache on the flag object
+async function loadEditFields(f, fieldList, panelId) {
+  if (f._editFields) return f._editFields;
+  const loadingEl = document.getElementById(panelId + '-loading');
+  if (loadingEl) loadingEl.style.display = 'block';
+  try {
+    const data = await fetch(`/api/customer/${f.customerId}/fields?fields=${fieldList}`).then(r => r.json());
+    f._editFields = data;
+    if (loadingEl) loadingEl.style.display = 'none';
+    populateEditFields(f, panelId);
+    return data;
+  } catch(e) {
+    if (loadingEl) { loadingEl.textContent = 'Failed to load current values.'; }
+    return null;
+  }
+}
+
+function populateEditFields(f, panelId) {
+  const d = f._editFields;
+  if (!d) return;
+  const fields = ['printtransactions','custentity264','custentity571','custentity594',
+                  'email','custentity562','custentity563','custentity531','custentity532'];
+  for (const key of fields) {
+    const el = document.getElementById(`${panelId}-ef-${key}`);
+    if (!el) continue;
+    const val = d[key];
+    if (el.type === 'checkbox') {
+      el.checked = (val === true || val === 'T' || (val && val.refName === 'Yes'));
+    } else {
+      // list field with refName or plain string
+      el.value = (val && typeof val === 'object') ? (val.refName || '') : (val || '');
+    }
+  }
+}
+
+function collectEditFields(panelId, keys) {
+  const out = {};
+  for (const key of keys) {
+    const el = document.getElementById(`${panelId}-ef-${key}`);
+    if (!el) continue;
+    if (el.type === 'checkbox') {
+      out[key] = el.checked;
+    } else {
+      out[key] = el.value;
+    }
+  }
+  return out;
+}
+
+async function saveCustomerFields(customerId, fields, statusId) {
+  try {
+    const res = await fetch(`/api/customer/${customerId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields }),
+    }).then(r => r.json());
+    if (res.error) throw new Error(res.error);
+    setEditStatus(statusId, true, 'Saved to NetSuite');
+  } catch(e) {
+    setEditStatus(statusId, false, e.message);
+  }
+}
+
+async function saveTransactionField(transactionId, fields, statusId) {
+  try {
+    const res = await fetch(`/api/transaction/${transactionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields }),
+    }).then(r => r.json());
+    if (res.error) throw new Error(res.error);
+    setEditStatus(statusId, true, 'Saved');
+  } catch(e) {
+    setEditStatus(statusId, false, e.message);
+  }
+}
+
+async function saveAddressFields(customerId, addressbookId, fields, statusId) {
+  try {
+    const res = await fetch(`/api/customer/${customerId}/address/${addressbookId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields }),
+    }).then(r => r.json());
+    if (res.error) throw new Error(res.error);
+    setEditStatus(statusId, true, 'Saved to NetSuite');
+  } catch(e) {
+    setEditStatus(statusId, false, e.message);
+  }
+}
+
+function renderEditPanel(f) {
+  const id = `card-${f.customerId}-${f.ruleId}`;
+
+  if (f.ruleId === 1) {
+    return `
+      <div class="edit-panel">
+        <div class="edit-panel-header">Edit in NetSuite</div>
+        <div class="edit-section">
+          <div class="edit-row">
+            <label>Online Invoice Service</label>
+            <input type="checkbox" class="edit-checkbox" id="${id}-ef-custentity310" checked />
+          </div>
+          <div class="edit-row">
+            <label>B2B System</label>
+            <select class="edit-select" id="${id}-ef-custentity318"><option value="">Loading…</option></select>
+          </div>
+          <button class="btn-save-ns" onclick="saveRule1('${f.customerId}','${id}')">Save to NetSuite</button>
+          ${editStatusSpan(id)}
+        </div>
+      </div>`;
+  }
+
+  if (f.ruleId === 2) {
+    const fieldKeys = ['printtransactions','custentity264','custentity571','custentity594','email','custentity562','custentity563','custentity531','custentity532'];
+    return `
+      <div class="edit-panel">
+        <div class="edit-panel-header">Edit in NetSuite</div>
+        <div class="edit-loading" id="${id}-loading">Loading current values…</div>
+        <div class="edit-section">
+          <div class="edit-section-label">Invoice</div>
+          <div class="edit-row"><label>${FIELD_LABELS.printtransactions}</label><input type="checkbox" class="edit-checkbox" id="${id}-ef-printtransactions" /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.custentity264}</label><input type="checkbox" class="edit-checkbox" id="${id}-ef-custentity264" /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.custentity562}</label><input type="text" class="edit-input" id="${id}-ef-custentity562" /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.custentity563}</label><input type="text" class="edit-input" id="${id}-ef-custentity563" /></div>
+        </div>
+        <div class="edit-section">
+          <div class="edit-section-label">Statement</div>
+          <div class="edit-row"><label>${FIELD_LABELS.custentity594}</label><input type="checkbox" class="edit-checkbox" id="${id}-ef-custentity594" /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.custentity571}</label><input type="checkbox" class="edit-checkbox" id="${id}-ef-custentity571" /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.custentity531}</label><input type="text" class="edit-input" id="${id}-ef-custentity531" /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.custentity532}</label><input type="text" class="edit-input" id="${id}-ef-custentity532" /></div>
+        </div>
+        <div class="edit-section">
+          <div class="edit-section-label">General</div>
+          <div class="edit-row"><label>${FIELD_LABELS.email}</label><input type="text" class="edit-input" id="${id}-ef-email" /></div>
+        </div>
+        <button class="btn-save-ns" onclick="saveRule2('${f.customerId}','${id}')">Save to NetSuite</button>
+        ${editStatusSpan(id)}
+      </div>`;
+  }
+
+  if (f.ruleId === 3) {
+    return `
+      <div class="edit-panel">
+        <div class="edit-panel-header">Edit in NetSuite</div>
+        <div class="edit-loading" id="${id}-loading">Loading current values…</div>
+        <div class="edit-section">
+          <div class="edit-section-label">Invoice</div>
+          <div class="edit-row"><label>${FIELD_LABELS.custentity264}</label><input type="checkbox" class="edit-checkbox" id="${id}-ef-custentity264" /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.custentity562}</label><input type="text" class="edit-input" id="${id}-ef-custentity562" /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.custentity563}</label><input type="text" class="edit-input" id="${id}-ef-custentity563" /></div>
+        </div>
+        <div class="edit-section">
+          <div class="edit-section-label">General</div>
+          <div class="edit-row"><label>${FIELD_LABELS.email}</label><input type="text" class="edit-input" id="${id}-ef-email" /></div>
+        </div>
+        <button class="btn-save-ns" onclick="saveRule3('${f.customerId}','${id}')">Save to NetSuite</button>
+        ${editStatusSpan(id)}
+      </div>`;
+  }
+
+  if (f.ruleId === 4) {
+    const siblings = f.fields?.siblingEmails || [];
+    const sibHtml = siblings.length
+      ? `<ul class="sibling-emails-list">${siblings.map(s => `<li>${s.companyname}: ${s.email}</li>`).join('')}</ul>`
+      : `<p style="font-size:12px;color:#6b7280;font-style:italic">No sibling emails found.</p>`;
+    return `
+      <div class="edit-panel">
+        <div class="edit-panel-header">Edit in NetSuite</div>
+        <div class="edit-section">
+          <div class="edit-section-label">Sibling Account Emails (read-only)</div>
+          ${sibHtml}
+        </div>
+        <div class="edit-section">
+          <div class="edit-section-label">Correct this account's email</div>
+          <div class="edit-row">
+            <label>${FIELD_LABELS.email}</label>
+            <input type="text" class="edit-input" id="${id}-ef-email" value="${f.fields?.email || ''}" />
+          </div>
+          <button class="btn-save-ns" onclick="saveRule4('${f.customerId}','${id}')">Save to NetSuite</button>
+          ${editStatusSpan(id)}
+        </div>
+      </div>`;
+  }
+
+  if (f.ruleId === 5) {
+    const invoices = f.fields?.invoices || [];
+    const poRequired = boolChecked(f.fields?.custentity_po_required);
+    return `
+      <div class="edit-panel">
+        <div class="edit-panel-header">Edit in NetSuite</div>
+        <div class="edit-section">
+          <div class="edit-section-label">Customer</div>
+          <div class="edit-row">
+            <label>${FIELD_LABELS.custentity_po_required}</label>
+            <input type="checkbox" class="edit-checkbox" id="${id}-ef-custentity_po_required" ${poRequired ? 'checked' : ''} />
+          </div>
+          <button class="btn-save-ns" onclick="saveRule5Customer('${f.customerId}','${id}')">Save Customer to NetSuite</button>
+          ${editStatusSpan(id + '-cust')}
+        </div>
+        <div class="edit-section">
+          <div class="edit-section-label">Invoices — Enter PO Numbers</div>
+          ${invoices.map((inv, idx) => `
+            <div class="invoice-edit-row">
+              <span class="inv-label">${inv.tranId} &nbsp; ${inv.tranDate}</span>
+              <input type="text" class="edit-input" id="${id}-inv-${idx}" placeholder="PO Number" value="${inv.otherrefnum || ''}" style="max-width:180px" />
+              <button class="btn-save-ns" onclick="saveRule5Invoice('${inv.transactionId}','${id}',${idx})">Save</button>
+              <span class="edit-status" id="${id}-inv-${idx}-estatus"></span>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }
+
+  if (f.ruleId === 6) {
+    const addresses = f.fields?.addresses || [];
+    return `
+      <div class="edit-panel">
+        <div class="edit-panel-header">Edit in NetSuite</div>
+        ${addresses.map((addr, idx) => {
+          const sid = `${id}-addr-${idx}`;
+          return `
+            <div class="edit-section">
+              <div class="edit-section-label">${addr.type} address</div>
+              <div class="edit-row"><label>Attention</label><input type="text" class="edit-input" id="${sid}-attention" value="${escHtml(addr.attention||'')}" /></div>
+              <div class="edit-row"><label>Addressee</label><input type="text" class="edit-input" id="${sid}-addressee" value="${escHtml(addr.addressee||'')}" /></div>
+              <div class="edit-row"><label>Address 1</label><input type="text" class="edit-input" id="${sid}-addr1" value="${escHtml(addr.addr1||'')}" /></div>
+              <div class="edit-row"><label>City</label><input type="text" class="edit-input" id="${sid}-city" value="${escHtml(addr.city||'')}" /></div>
+              <div class="edit-row"><label>State</label><input type="text" class="edit-input" id="${sid}-state" value="${escHtml(addr.state||'')}" /></div>
+              <div class="edit-row"><label>Zip</label><input type="text" class="edit-input" id="${sid}-zip" value="${escHtml(addr.zip||'')}" /></div>
+              <button class="btn-save-ns" onclick="saveRule6Address('${f.customerId}','${addr.addressbookid}','${sid}')">Save Address to NetSuite</button>
+              <span class="edit-status" id="${sid}-estatus"></span>
+            </div>`;
+        }).join('')}
+      </div>`;
+  }
+
+  return '';
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Rule save handlers ────────────────────────────────────────────────────────
+
+async function saveRule1(customerId, id) {
+  const custentity310 = document.getElementById(`${id}-ef-custentity310`)?.checked ?? true;
+  const custentity318Id = document.getElementById(`${id}-ef-custentity318`)?.value;
+  const fields = { custentity310 };
+  if (custentity318Id) fields.custentity318 = { id: custentity318Id };
+  await saveCustomerFields(customerId, fields, id);
+}
+
+async function saveRule2(customerId, id) {
+  const keys = ['printtransactions','custentity264','custentity571','custentity594','custentity562','custentity563','custentity531','custentity532','email'];
+  const fields = collectEditFields(id, keys);
+  await saveCustomerFields(customerId, fields, id);
+}
+
+async function saveRule3(customerId, id) {
+  const keys = ['custentity264','custentity562','custentity563','email'];
+  const fields = collectEditFields(id, keys);
+  await saveCustomerFields(customerId, fields, id);
+}
+
+async function saveRule4(customerId, id) {
+  const email = document.getElementById(`${id}-ef-email`)?.value || '';
+  await saveCustomerFields(customerId, { email }, id);
+}
+
+async function saveRule5Customer(customerId, id) {
+  const custentity_po_required = document.getElementById(`${id}-ef-custentity_po_required`)?.checked ?? false;
+  const statusId = id + '-cust';
+  await saveCustomerFields(customerId, { custentity_po_required }, statusId);
+}
+
+async function saveRule5Invoice(transactionId, id, idx) {
+  const otherrefnum = document.getElementById(`${id}-inv-${idx}`)?.value || '';
+  const statusId = `${id}-inv-${idx}`;
+  await saveTransactionField(transactionId, { otherrefnum }, statusId);
+}
+
+async function saveRule6Address(customerId, addressbookId, sid) {
+  const fields = {
+    attention: document.getElementById(`${sid}-attention`)?.value || '',
+    addressee: document.getElementById(`${sid}-addressee`)?.value || '',
+    addr1: document.getElementById(`${sid}-addr1`)?.value || '',
+    city: document.getElementById(`${sid}-city`)?.value || '',
+    state: document.getElementById(`${sid}-state`)?.value || '',
+    zip: document.getElementById(`${sid}-zip`)?.value || '',
+  };
+  await saveAddressFields(customerId, addressbookId, fields, sid);
+}
+
+// Called when a card is expanded; handles lazy-load and B2B dropdown population
+async function onCardOpen(f) {
+  const id = `card-${f.customerId}-${f.ruleId}`;
+
+  if (f.ruleId === 1) {
+    const systems = await fetchB2BSystems();
+    const sel = document.getElementById(`${id}-ef-custentity318`);
+    if (sel) {
+      sel.innerHTML = `<option value="">— select —</option>` +
+        systems.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    }
+  }
+
+  if (f.ruleId === 2) {
+    const fieldList = 'printtransactions,custentity264,custentity571,custentity594,email,custentity562,custentity563,custentity531,custentity532';
+    loadEditFields(f, fieldList, id);
+  }
+
+  if (f.ruleId === 3) {
+    const fieldList = 'custentity264,email,custentity562,custentity563';
+    loadEditFields(f, fieldList, id);
+  }
+}
 const RULE_LABELS = {
   1:'Missing Online Invoice vs. Siblings', 2:'No Delivery Method',
   3:'Email Flag, No Address', 4:'Email Domain Mismatch',
@@ -385,6 +780,7 @@ function renderCard(f) {
         <div class="rule-label">${f.ruleLabel}</div>
         <p class="detail">${f.detail}</p>
         ${renderFieldDetails(f)}
+        ${renderEditPanel(f)}
         <div class="review-form">
           <div class="form-row">
             <label class="form-label">Reviewer name</label>
@@ -439,6 +835,14 @@ function toggleCard(id) {
   const chev = document.getElementById(id+'-chev');
   const open = body.classList.toggle('open');
   chev.textContent = open ? '▾' : '▸';
+  if (open) {
+    // parse customerId and ruleId from id = "card-{customerId}-{ruleId}"
+    const parts = id.replace(/^card-/, '').split('-');
+    const ruleId = Number(parts[parts.length - 1]);
+    const customerId = parts.slice(0, parts.length - 1).join('-');
+    const f = flags.find(fl => String(fl.customerId) === customerId && fl.ruleId === ruleId);
+    if (f) onCardOpen(f);
+  }
 }
 
 async function saveFlag(customerId, ruleId, status, cardId, parentId, ruleLabel) {
