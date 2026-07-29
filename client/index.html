@@ -380,28 +380,27 @@ function renderEditPanel(f) {
   }
 
   if (f.ruleId === 2) {
-    const fieldKeys = ['printtransactions','custentity264','custentity571','custentity594','email','custentity562','custentity563','custentity531','custentity532'];
+    const fv = f.fields || {};
     return `
       <div class="edit-panel">
         <div class="edit-panel-header">Edit in NetSuite</div>
-        <div class="edit-loading" id="${id}-loading">Loading current values…</div>
         <div class="edit-section">
           <div class="edit-section-label">Invoice</div>
-          <div class="edit-row"><label>${FIELD_LABELS.printtransactions}</label><input type="checkbox" class="edit-checkbox" id="${id}-ef-printtransactions" /></div>
-          <div class="edit-row"><label>${FIELD_LABELS.custentity264}</label><input type="checkbox" class="edit-checkbox" id="${id}-ef-custentity264" /></div>
-          <div class="edit-row"><label>${FIELD_LABELS.custentity562}</label><input type="text" class="edit-input" id="${id}-ef-custentity562" /></div>
-          <div class="edit-row"><label>${FIELD_LABELS.custentity563}</label><input type="text" class="edit-input" id="${id}-ef-custentity563" /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.printtransactions}</label><input type="checkbox" class="edit-checkbox" id="${id}-ef-printtransactions" ${boolChecked(fv.printtransactions)?'checked':''} /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.custentity264}</label><input type="checkbox" class="edit-checkbox" id="${id}-ef-custentity264" ${boolChecked(fv.custentity264)?'checked':''} /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.custentity562}</label><input type="text" class="edit-input" id="${id}-ef-custentity562" value="${escHtml(fv.custentity562||'')}" /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.custentity563}</label><input type="text" class="edit-input" id="${id}-ef-custentity563" value="${escHtml(fv.custentity563||'')}" /></div>
         </div>
         <div class="edit-section">
           <div class="edit-section-label">Statement</div>
-          <div class="edit-row"><label>${FIELD_LABELS.custentity594}</label><input type="checkbox" class="edit-checkbox" id="${id}-ef-custentity594" /></div>
-          <div class="edit-row"><label>${FIELD_LABELS.custentity571}</label><input type="checkbox" class="edit-checkbox" id="${id}-ef-custentity571" /></div>
-          <div class="edit-row"><label>${FIELD_LABELS.custentity531}</label><input type="text" class="edit-input" id="${id}-ef-custentity531" /></div>
-          <div class="edit-row"><label>${FIELD_LABELS.custentity532}</label><input type="text" class="edit-input" id="${id}-ef-custentity532" /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.custentity594}</label><input type="checkbox" class="edit-checkbox" id="${id}-ef-custentity594" ${boolChecked(fv.custentity594)?'checked':''} /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.custentity571}</label><input type="checkbox" class="edit-checkbox" id="${id}-ef-custentity571" ${boolChecked(fv.custentity571)?'checked':''} /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.custentity531}</label><input type="text" class="edit-input" id="${id}-ef-custentity531" value="${escHtml(fv.custentity531||'')}" /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.custentity532}</label><input type="text" class="edit-input" id="${id}-ef-custentity532" value="${escHtml(fv.custentity532||'')}" /></div>
         </div>
         <div class="edit-section">
           <div class="edit-section-label">General</div>
-          <div class="edit-row"><label>${FIELD_LABELS.email}</label><input type="text" class="edit-input" id="${id}-ef-email" /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.email}</label><input type="text" class="edit-input" id="${id}-ef-email" value="${escHtml(fv.email||'')}" /></div>
         </div>
         <button class="btn-save-ns" onclick="saveRule2('${f.customerId}','${id}')">Save to NetSuite</button>
         ${editStatusSpan(id)}
@@ -409,19 +408,19 @@ function renderEditPanel(f) {
   }
 
   if (f.ruleId === 3) {
+    const fv = f.fields || {};
     return `
       <div class="edit-panel">
         <div class="edit-panel-header">Edit in NetSuite</div>
-        <div class="edit-loading" id="${id}-loading">Loading current values…</div>
         <div class="edit-section">
           <div class="edit-section-label">Invoice</div>
-          <div class="edit-row"><label>${FIELD_LABELS.custentity264}</label><input type="checkbox" class="edit-checkbox" id="${id}-ef-custentity264" /></div>
-          <div class="edit-row"><label>${FIELD_LABELS.custentity562}</label><input type="text" class="edit-input" id="${id}-ef-custentity562" /></div>
-          <div class="edit-row"><label>${FIELD_LABELS.custentity563}</label><input type="text" class="edit-input" id="${id}-ef-custentity563" /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.custentity264}</label><input type="checkbox" class="edit-checkbox" id="${id}-ef-custentity264" ${boolChecked(fv.custentity264)?'checked':''} /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.custentity562}</label><input type="text" class="edit-input" id="${id}-ef-custentity562" value="${escHtml(fv.custentity562||'')}" /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.custentity563}</label><input type="text" class="edit-input" id="${id}-ef-custentity563" value="${escHtml(fv.custentity563||'')}" /></div>
         </div>
         <div class="edit-section">
           <div class="edit-section-label">General</div>
-          <div class="edit-row"><label>${FIELD_LABELS.email}</label><input type="text" class="edit-input" id="${id}-ef-email" /></div>
+          <div class="edit-row"><label>${FIELD_LABELS.email}</label><input type="text" class="edit-input" id="${id}-ef-email" value="${escHtml(fv.email||'')}" /></div>
         </div>
         <button class="btn-save-ns" onclick="saveRule3('${f.customerId}','${id}')">Save to NetSuite</button>
         ${editStatusSpan(id)}
@@ -771,12 +770,35 @@ function renderFieldDetails(f) {
     </div>`;
   }
 
+  if (ruleId===2) {
+    const boolLabel = v => v==='T' ? 'Yes' : 'No';
+    return `<div class="field-box">
+      <div class="field-row"><span class="field-key">${FIELD_LABELS.printtransactions}</span><span class="field-val">${boolLabel(fields.printtransactions)}</span></div>
+      <div class="field-row"><span class="field-key">${FIELD_LABELS.custentity264}</span><span class="field-val">${boolLabel(fields.custentity264)}</span></div>
+      <div class="field-row"><span class="field-key">${FIELD_LABELS.custentity310}</span><span class="field-val">${boolLabel(fields.custentity310)}</span></div>
+    </div>`;
+  }
+
+  if (ruleId===3) {
+    return `<div class="field-box">
+      <div class="field-row"><span class="field-key">${FIELD_LABELS.custentity264}</span><span class="field-val">${fields.custentity264==='T'?'Yes':'No'}</span></div>
+      <div class="field-row"><span class="field-key">${FIELD_LABELS.email}</span><span class="field-val">${fields.email||'<em style="color:#9ca3af">empty</em>'}</span></div>
+    </div>`;
+  }
+
+  if (ruleId===4) {
+    return `<div class="field-box">
+      <div class="field-row"><span class="field-key">${FIELD_LABELS.email}</span><span class="field-val">${fields.email||''}</span></div>
+      <div class="field-row"><span class="field-key">Expected domain</span><span class="field-val">@${fields.expectedDomain||''}</span></div>
+    </div>`;
+  }
+
   const entries = Object.entries(fields).filter(([,v])=>v!==null&&v!==undefined&&!Array.isArray(v)&&typeof v!=='object');
   if (!entries.length) return '';
   return `<div class="field-box">
     ${entries.map(([k,v])=>`
       <div class="field-row">
-        <span class="field-key">${k}</span>
+        <span class="field-key">${FIELD_LABELS[k]||k}</span>
         <span class="field-val">${String(v)||'<em style="color:#9ca3af">empty</em>'}</span>
       </div>`).join('')}
   </div>`;
