@@ -468,7 +468,7 @@ async function saveFlag(customerId, ruleId, status, cardId, parentId, ruleLabel)
     const nsToast = document.getElementById(cardId+'-ns-toast');
     if (nsToast && addToNetSuite) {
       if (result.netsuiteNoteError) {
-        nsToast.textContent = '⚠ NetSuite note failed';
+        nsToast.textContent = '⚠ NetSuite note failed: ' + result.netsuiteNoteError;
         nsToast.style.background = '#fef2f2';
         nsToast.style.color = '#b91c1c';
       } else {
