@@ -55,11 +55,12 @@ app.get('/api/flags', async (req, res) => {
 
     const reviewMap = getReviewMap();
 
+    const activeFlagKeys = new Set();
     const flags = cachedResult.flags.map(f => {
       const key = `${f.customerId}:${f.ruleId}`;
+      activeFlagKeys.add(key);
       const review = reviewMap[key];
 
-      // If the account moved to a different parent since it was reviewed/dismissed, treat as open again
       const parentChanged = review?.parent_id != null &&
         f.parentId != null &&
         String(review.parent_id) !== String(f.parentId);
@@ -76,6 +77,23 @@ app.get('/api/flags', async (req, res) => {
         parentChanged: parentChanged || false,
       };
     });
+
+    // Include reviewed/dismissed flags that are no longer in the current scan (issue resolved in NetSuite)
+    for (const [key, review] of Object.entries(reviewMap)) {
+      if (activeFlagKeys.has(key)) continue;
+      if (review.status === 'open') continue;
+      if (!review.flag_meta) continue;
+      flags.push({
+        ...review.flag_meta,
+        netsuiteUrl: getRecordUrl(review.customer_id),
+        status: review.status,
+        note: review.note || null,
+        reviewedBy: review.reviewed_by || null,
+        reviewedAt: review.reviewed_at || null,
+        parentChanged: false,
+        resolvedInNetSuite: true,
+      });
+    }
 
     const { statusFilter, ruleFilter } = req.query;
     let filtered = flags;
@@ -118,14 +136,14 @@ app.get('/api/scan/status', (req, res) => {
 // PATCH /api/flags/:customerId/:ruleId — mark reviewed or dismissed
 app.patch('/api/flags/:customerId/:ruleId', async (req, res) => {
   const { customerId, ruleId } = req.params;
-  const { status, note, reviewedBy, parentId, addToNetSuite, companyName, ruleLabel } = req.body;
+  const { status, note, reviewedBy, parentId, addToNetSuite, companyName, ruleLabel, flagMeta } = req.body;
 
   const valid = ['open', 'reviewed', 'dismissed'];
   if (!valid.includes(status)) {
     return res.status(400).json({ error: `status must be one of: ${valid.join(', ')}` });
   }
 
-  upsertReview({ customerId, ruleId: Number(ruleId), status, note, reviewedBy, parentId });
+  upsertReview({ customerId, ruleId: Number(ruleId), status, note, reviewedBy, parentId, flagMeta });
 
   // Write note to NetSuite if requested
   let netsuiteNoteError = null;

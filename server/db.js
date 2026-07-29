@@ -16,10 +16,11 @@ function writeJSON(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
 }
 
-// reviews: { "customerId:ruleId": { customer_id, rule_id, status, note, reviewed_by, reviewed_at, parent_id } }
-function upsertReview({ customerId, ruleId, status, note, reviewedBy, parentId }) {
+// reviews: { "customerId:ruleId": { customer_id, rule_id, status, note, reviewed_by, reviewed_at, parent_id, flag_meta } }
+function upsertReview({ customerId, ruleId, status, note, reviewedBy, parentId, flagMeta }) {
   const reviews = readJSON(REVIEWS_FILE, {});
   const key = `${customerId}:${ruleId}`;
+  const existing = reviews[key] || {};
   reviews[key] = {
     customer_id: String(customerId),
     rule_id: ruleId,
@@ -28,6 +29,8 @@ function upsertReview({ customerId, ruleId, status, note, reviewedBy, parentId }
     reviewed_by: reviewedBy || null,
     reviewed_at: new Date().toISOString(),
     parent_id: parentId ? String(parentId) : null,
+    // Preserve flag metadata so ghost entries can be shown after rescan
+    flag_meta: flagMeta || existing.flag_meta || null,
   };
   writeJSON(REVIEWS_FILE, reviews);
 }

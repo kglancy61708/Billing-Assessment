@@ -396,6 +396,7 @@ function renderCard(f) {
           </div>
           ${f.reviewedAt ? `<p class="reviewed-info">Last updated ${new Date(f.reviewedAt).toLocaleString()}${f.reviewedBy?' by '+f.reviewedBy:''}</p>`:''}
           ${f.parentChanged ? `<p class="reviewed-info" style="color:#b45309">⚠ Parent account changed — reopened for review.</p>` : ''}
+          ${f.resolvedInNetSuite ? `<p class="reviewed-info" style="color:#059669">✓ Issue no longer detected in current scan — record kept for reference.</p>` : ''}
           <div class="form-row" style="flex-direction:row;align-items:center;gap:8px;margin-bottom:10px">
             <input type="checkbox" id="${id}-ns-note" checked style="width:16px;height:16px;cursor:pointer" />
             <label for="${id}-ns-note" style="font-size:12px;color:#374151;cursor:pointer;font-weight:500">Add note to NetSuite customer record</label>
@@ -454,10 +455,16 @@ async function saveFlag(customerId, ruleId, status, cardId, parentId, ruleLabel)
 
   try {
     const flag = flags.find(f => String(f.customerId)===String(customerId) && f.ruleId===ruleId);
+    const flagMeta = flag ? {
+      customerId: flag.customerId, companyName: flag.companyName,
+      parentId: flag.parentId, parentName: flag.parentName,
+      ruleId: flag.ruleId, ruleLabel: flag.ruleLabel,
+      detail: flag.detail, fields: flag.fields,
+    } : null;
     const result = await fetch(`/api/flags/${customerId}/${ruleId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, note, reviewedBy, parentId, addToNetSuite, companyName: flag?.companyName, ruleLabel }),
+      body: JSON.stringify({ status, note, reviewedBy, parentId, addToNetSuite, companyName: flag?.companyName, ruleLabel, flagMeta }),
     }).then(r => r.json());
 
     if (flag) { flag.status = status; flag.note = note; flag.reviewedBy = reviewedBy; flag.reviewedAt = new Date().toISOString(); }

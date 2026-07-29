@@ -131,7 +131,7 @@ async function listCustomersREST(limit = 3) {
 
 // Post a note to a customer record in NetSuite
 async function createCustomerNote(customerId, title, noteText, retries = 6) {
-  const url = `${getBaseUrl()}/services/rest/record/v1/note`;
+  const url = `${getBaseUrl()}/services/rest/record/v1/customernote`;
   const today = new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
   const body = JSON.stringify({
     entity: { id: String(customerId) },
