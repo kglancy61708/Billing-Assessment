@@ -205,6 +205,35 @@ async function updateCustomerAddress(customerId, addressbookId, addressFields, r
   }
 }
 
+// Fetch the addressbook sublist for a customer to get line IDs (not available via SuiteQL)
+async function getCustomerAddressbook(customerId, retries = 6) {
+  const url = `${getBaseUrl()}/services/rest/record/v1/customer/${customerId}/addressbook?limit=100`;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const oauth = getOAuth();
+    const token = { key: NS_TOKEN_ID, secret: NS_TOKEN_SECRET };
+    const authData = oauth.authorize({ url, method: 'GET' }, token);
+    const authHeader = oauth.toHeader(authData);
+    authHeader.Authorization = authHeader.Authorization.replace(
+      'OAuth ', `OAuth realm="${NS_ACCOUNT_ID.toUpperCase()}",`
+    );
+
+    const res = await fetch(url, { method: 'GET', headers: authHeader });
+
+    if (res.status === 429 && attempt < retries) {
+      await sleep(5000 * (attempt + 1));
+      continue;
+    }
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`NetSuite getCustomerAddressbook error ${res.status}: ${text}`);
+    }
+
+    return res.json();
+  }
+}
+
 function getRecordUrl(customerId) {
   const acct = NS_ACCOUNT_ID.replace(/_/g, '-').toLowerCase();
   return `https://${acct}.app.netsuite.com/app/common/entity/custjob.nl?id=${customerId}`;
@@ -294,4 +323,4 @@ async function getFieldRefName(customerId, fieldName) {
   return val.refName || val.name || null;
 }
 
-module.exports = { suiteQL, suiteQLAll, updateCustomer, getRecordUrl, listCustomersREST, createCustomerNote, getFieldRefName, getCustomerFields, updateTransaction, updateCustomerAddress };
+module.exports = { suiteQL, suiteQLAll, updateCustomer, getRecordUrl, listCustomersREST, createCustomerNote, getFieldRefName, getCustomerFields, updateTransaction, updateCustomerAddress, getCustomerAddressbook };

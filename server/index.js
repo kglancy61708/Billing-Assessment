@@ -6,7 +6,7 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 const { runAllRules, resolveB2BNames, getB2BCache } = require('./rules');
-const { getRecordUrl, createCustomerNote, getCustomerFields, updateCustomer, updateTransaction, updateCustomerAddress } = require('./netsuite');
+const { getRecordUrl, createCustomerNote, getCustomerFields, updateCustomer, updateTransaction, updateCustomerAddress, getCustomerAddressbook } = require('./netsuite');
 const {
   upsertReview,
   getReviewMap,
@@ -92,6 +92,17 @@ app.patch('/api/customer/:id/address/:addressbookId', async (req, res) => {
     if (!fields) return res.status(400).json({ error: 'body.fields required' });
     const result = await updateCustomerAddress(id, addressbookId, fields);
     res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/customer/:id/addressbook — return addressbook sublist with line IDs
+app.get('/api/customer/:id/addressbook', async (req, res) => {
+  try {
+    const data = await getCustomerAddressbook(req.params.id);
+    res.json(data);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });

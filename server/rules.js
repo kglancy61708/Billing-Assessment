@@ -298,7 +298,6 @@ async function rule6_incompleteAddress() {
   const rows = await suiteQLAll(`
     SELECT c.id, c.companyname,
            ca.defaultbilling, ca.defaultshipping,
-           ca.id AS addressbookid,
            a.addressee,
            a.attention,
            a.addr1,
@@ -344,7 +343,6 @@ async function rule6_incompleteAddress() {
       byCustomer[cid].addresses.push({
         type,
         missingFields: missing,
-        addressbookid: String(r.addressbookid),
         addressee: r.addressee || '',
         attention: r.attention || '',
         addr1: r.addr1 || '',
