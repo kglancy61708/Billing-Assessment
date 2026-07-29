@@ -1,4 +1,4 @@
-const { suiteQLAll, getFieldRefName } = require('./netsuite');
+const { suiteQLAll } = require('./netsuite');
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -8,26 +8,21 @@ const b2bNameCache = {};
 
 async function resolveB2BNames() {
   try {
+    // BUILTIN.DF resolves list field display names — safe to use at startup outside the scan
     const rows = await suiteQLAll(`
-      SELECT DISTINCT custentity318
+      SELECT DISTINCT custentity318, BUILTIN.DF(custentity318) AS b2bname
       FROM customer
       WHERE custentity318 IS NOT NULL AND custentity318 != ''
     `);
-    const uniqueIds = rows.map(r => r.custentity318).filter(Boolean);
-    // Find one customer per unique ID to resolve the display name via REST
-    for (const id of uniqueIds) {
-      if (b2bNameCache[id]) continue;
-      try {
-        const sample = await suiteQLAll(`
-          SELECT id FROM customer WHERE custentity318 = '${id}' AND rownum <= 1
-        `);
-        if (sample.length > 0) {
-          const name = await getFieldRefName(String(sample[0].id), 'custentity318');
-          if (name) b2bNameCache[id] = name;
-        }
-      } catch (_) { /* non-fatal */ }
+    for (const r of rows) {
+      if (r.custentity318 && r.b2bname) {
+        b2bNameCache[String(r.custentity318)] = r.b2bname;
+      }
     }
-  } catch (_) { /* non-fatal — names just won't resolve */ }
+    console.log(`B2B name cache: ${Object.keys(b2bNameCache).length} entries`, b2bNameCache);
+  } catch (err) {
+    console.warn('resolveB2BNames failed (IDs will show instead of names):', err.message);
+  }
 }
 
 // Rule 1: Sub-account missing custentity310 when at least one sibling has it true
