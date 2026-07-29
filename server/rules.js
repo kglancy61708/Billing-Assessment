@@ -1,4 +1,4 @@
-const { suiteQLAll } = require('./netsuite');
+const { suiteQLAll, getFieldRefName } = require('./netsuite');
 
 // Rule 1: Sub-account missing custentity310 when at least one sibling has it true
 async function rule1_missingOnlineInvoiceVsSiblings() {
@@ -40,13 +40,24 @@ async function rule1_missingOnlineInvoiceVsSiblings() {
         AND s.entitystatus = 13
         AND s.custentity310 = 'T'
     `);
+    // Resolve unique custentity318 IDs to display names via REST (one call per unique value)
+    const uniqueB2BIds = [...new Set(siblingRows.map(s => s.custentity318).filter(Boolean))];
+    const b2bNameById = {};
+    for (const id of uniqueB2BIds) {
+      const sibling = siblingRows.find(s => s.custentity318 === id);
+      if (sibling) {
+        const name = await getFieldRefName(String(sibling.id), 'custentity318');
+        b2bNameById[id] = name || id;
+      }
+    }
+
     for (const s of siblingRows) {
       const pid = String(s.parent);
       if (!siblingsByParent[pid]) siblingsByParent[pid] = [];
       siblingsByParent[pid].push({
         id: String(s.id),
         companyname: s.companyname,
-        custentity318: s.custentity318 || null,
+        custentity318: s.custentity318 ? (b2bNameById[s.custentity318] || s.custentity318) : null,
       });
     }
   }

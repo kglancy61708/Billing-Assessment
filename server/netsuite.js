@@ -169,4 +169,22 @@ async function createCustomerNote(customerId, title, noteText, retries = 6) {
   }
 }
 
-module.exports = { suiteQL, suiteQLAll, updateCustomer, getRecordUrl, listCustomersREST, createCustomerNote };
+// Fetch a single customer record via REST and return a specific field's refName (display value)
+async function getFieldRefName(customerId, fieldName) {
+  const url = `${getBaseUrl()}/services/rest/record/v1/customer/${customerId}?fields=${fieldName}`;
+  const oauth = getOAuth();
+  const token = { key: NS_TOKEN_ID, secret: NS_TOKEN_SECRET };
+  const authData = oauth.authorize({ url, method: 'GET' }, token);
+  const authHeader = oauth.toHeader(authData);
+  authHeader.Authorization = authHeader.Authorization.replace(
+    'OAuth ', `OAuth realm="${NS_ACCOUNT_ID.toUpperCase()}",`
+  );
+  const res = await fetch(url, { method: 'GET', headers: authHeader });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const val = data[fieldName];
+  if (!val) return null;
+  return val.refName || val.name || null;
+}
+
+module.exports = { suiteQL, suiteQLAll, updateCustomer, getRecordUrl, listCustomersREST, createCustomerNote, getFieldRefName };
