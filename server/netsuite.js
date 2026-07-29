@@ -129,19 +129,6 @@ async function listCustomersREST(limit = 3) {
   return res.json();
 }
 
-// Look up an employee's internal ID by display name
-async function findEmployeeId(name) {
-  if (!name) return null;
-  try {
-    const trimmed = name.trim().replace(/'/g, "''");
-    const rows = await suiteQL(
-      `SELECT id FROM employee WHERE LOWER(firstname || ' ' || lastname) = LOWER('${trimmed}') AND rownum <= 1`,
-      1, 0
-    );
-    return rows?.items?.[0]?.id ? String(rows.items[0].id) : null;
-  } catch (_) { return null; }
-}
-
 // Post a note to a customer record in NetSuite via custom record type customrecord3018
 // custrecord3604 (Note Type list): Dismissed=1, Reviewed=2
 // custrecord3605 (Flag Type list): Rule 1=1, Rule 2=2, ... Rule 6=6
@@ -149,15 +136,13 @@ async function createCustomerNote(customerId, noteText, status, ruleId, reviewed
   const url = `${getBaseUrl()}/services/rest/record/v1/customrecord3018`;
   const noteTypeId = status === 'reviewed' ? '2' : '1';
 
-  const employeeId = await findEmployeeId(reviewedBy);
-
   const payload = {
     custrecord3601: { id: String(customerId) },   // customer link
+    custrecord3602: reviewedBy || '',              // reviewer name (free text)
     custrecord3604: { id: noteTypeId },            // note type (Dismissed/Reviewed)
     custrecord3605: { id: String(ruleId) },        // flag type (rule 1-6)
     custrecord3603: noteText,                      // note text
   };
-  if (employeeId) payload.custrecord3602 = { id: employeeId }; // employee (reviewer)
 
   const body = JSON.stringify(payload);
 
