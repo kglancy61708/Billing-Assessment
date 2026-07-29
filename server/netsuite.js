@@ -130,13 +130,16 @@ async function listCustomersREST(limit = 3) {
 }
 
 // Post a note to a customer record in NetSuite via custom record type customrecord3018
-async function createCustomerNote(customerId, title, noteText, flagType, retries = 6) {
+// custrecord3604 (Note Type list): Dismissed=1, Reviewed=2
+// custrecord3605 (Flag Type list): Rule 1=1, Rule 2=2, ... Rule 6=6
+async function createCustomerNote(customerId, noteText, status, ruleId, retries = 6) {
   const url = `${getBaseUrl()}/services/rest/record/v1/customrecord3018`;
+  const noteTypeId = status === 'reviewed' ? '2' : '1';
   const body = JSON.stringify({
-    custrecord3601: { id: String(customerId) }, // customer link
-    custrecord3604: title,                       // title/subject
-    custrecord3603: noteText,                    // note text
-    custrecord3605: flagType || '',              // flag type (rule label)
+    custrecord3601: { id: String(customerId) },   // customer link
+    custrecord3604: { id: noteTypeId },            // note type (Dismissed/Reviewed)
+    custrecord3605: { id: String(ruleId) },        // flag type (rule 1-6)
+    custrecord3603: noteText,                      // note text
   });
 
   for (let attempt = 0; attempt <= retries; attempt++) {

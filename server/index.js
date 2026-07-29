@@ -150,12 +150,11 @@ app.patch('/api/flags/:customerId/:ruleId', async (req, res) => {
   if (addToNetSuite && status !== 'open') {
     try {
       const actionLabel = status === 'reviewed' ? 'Reviewed' : 'Dismissed';
-      const title = `[Billing Assessment] Rule ${ruleId} – ${ruleLabel || ''} — ${actionLabel}`;
       const lines = [`Action: ${actionLabel}`, `Rule ${ruleId}: ${ruleLabel || ''}`];
       if (reviewedBy) lines.push(`Reviewed by: ${reviewedBy}`);
       if (note) lines.push(`Note: ${note}`);
       lines.push(`Date: ${new Date().toLocaleDateString('en-US')}`);
-      await createCustomerNote(customerId, title, lines.join('\n'), ruleLabel);
+      await createCustomerNote(customerId, lines.join('\n'), status, Number(ruleId));
     } catch (err) {
       netsuiteNoteError = err.message;
     }
