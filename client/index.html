@@ -314,6 +314,14 @@ function renderFieldDetails(f) {
   const { fields, ruleId } = f;
   if (!fields) return '';
 
+  if (ruleId===1 && fields.siblingB2BSystems?.length) {
+    return `<div class="field-box">
+      <div style="font-weight:600;margin-bottom:6px">B2B System(s) on sibling accounts (custentity318):</div>
+      ${fields.siblingB2BSystems.map(v=>`
+        <div class="field-row"><span class="field-val">${v}</span></div>`).join('')}
+    </div>`;
+  }
+
   if (ruleId===5 && fields.invoices?.length) {
     return `<div class="field-box">
       <div style="font-weight:600;margin-bottom:6px">Invoices missing PO# (${fields.invoiceCount} total):</div>

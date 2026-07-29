@@ -27,15 +27,40 @@ async function rule1_missingOnlineInvoiceVsSiblings() {
       )
   `);
 
-  return rows.map(r => ({
-    customerId: String(r.id),
-    companyName: r.companyname,
-    parentId: r.parent ? String(r.parent) : null,
-    ruleId: 1,
-    ruleLabel: 'Missing Online Invoice Service (vs. siblings)',
-    detail: 'One or more sibling sub-accounts have Customer has Online Invoice Service (custentity310) checked, but this account does not.',
-    fields: { custentity310: r.custentity310 },
-  }));
+  // Fetch B2B System (custentity318) values from siblings that have Online Invoice Service enabled
+  const parentIds = [...new Set(rows.map(r => r.parent).filter(Boolean))];
+  const siblingB2B = {};
+  if (parentIds.length > 0) {
+    const siblingRows = await suiteQLAll(`
+      SELECT s.parent, s.custentity318
+      FROM customer s
+      WHERE s.parent IN (${parentIds.join(',')})
+        AND s.isinactive = 'F'
+        AND s.entitystatus = 13
+        AND s.custentity310 = 'T'
+        AND s.custentity318 IS NOT NULL
+        AND s.custentity318 != ''
+    `);
+    for (const s of siblingRows) {
+      const pid = String(s.parent);
+      if (!siblingB2B[pid]) siblingB2B[pid] = new Set();
+      siblingB2B[pid].add(s.custentity318);
+    }
+  }
+
+  return rows.map(r => {
+    const pid = r.parent ? String(r.parent) : null;
+    const b2bSystems = pid && siblingB2B[pid] ? [...siblingB2B[pid]] : [];
+    return {
+      customerId: String(r.id),
+      companyName: r.companyname,
+      parentId: pid,
+      ruleId: 1,
+      ruleLabel: 'Missing Online Invoice Service (vs. siblings)',
+      detail: 'One or more sibling sub-accounts have Customer has Online Invoice Service (custentity310) checked, but this account does not.',
+      fields: { custentity310: r.custentity310, siblingB2BSystems: b2bSystems },
+    };
+  });
 }
 
 // Rule 2: None of the three billing delivery methods are enabled
