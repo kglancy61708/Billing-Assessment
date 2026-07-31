@@ -180,14 +180,27 @@ async function rule3_emailFlagNoAddress() {
 
 // Rule 4: Email domain differs from sibling sub-accounts under the same parent
 // Checks c.email, custentity562 (Invoice Email #1), and custentity563 (Invoice Email #2)
+// Strategy: flag only accounts with open invoices, but compute majority domain from ALL
+// active siblings (not just those with invoices) so centrally-billed greystar.com accounts
+// still set the expected domain even if they have no individual open invoices.
 async function rule4_emailDomainMismatch() {
-  const rows = await suiteQLAll(`
+  function getEmails(r) {
+    return [r.email, r.custentity562, r.custentity563].filter(e => e && e.trim() !== '');
+  }
+  function getDomain(email) {
+    const parts = (email || '').toLowerCase().split('@');
+    return parts.length === 2 && parts[1] ? parts[1] : null;
+  }
+
+  // Step 1: Candidates — active sub-accounts with open invoices and at least one email
+  const candidates = await suiteQLAll(`
     SELECT c.id, c.companyname, c.category, c.parent,
            c.email, c.custentity562, c.custentity563
     FROM customer c
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
       AND LOWER(c.companyname) NOT LIKE '%test%'
+      AND c.parent IS NOT NULL
       AND EXISTS (
         SELECT 1 FROM transaction t
         WHERE t.entity = c.id
@@ -195,7 +208,6 @@ async function rule4_emailDomainMismatch() {
           AND t.voided = 'F'
           AND t.status = 'A'
       )
-      AND c.parent IS NOT NULL
       AND (
         (c.email IS NOT NULL AND c.email != '')
         OR (c.custentity562 IS NOT NULL AND c.custentity562 != '')
@@ -203,77 +215,92 @@ async function rule4_emailDomainMismatch() {
       )
   `);
 
-  // Helper: extract all non-null email addresses for a row
-  function getEmails(r) {
-    return [r.email, r.custentity562, r.custentity563].filter(e => e && e.trim() !== '');
+  if (candidates.length === 0) return [];
+
+  // Step 2: For every parent group represented in candidates, fetch ALL active siblings
+  // (no invoice requirement) to compute the true majority domain.
+  // Use subquery to avoid direct c.parent IN (...) which has SuiteQL filter quirks.
+  const parentIds = [...new Set(candidates.map(r => String(r.parent)))];
+
+  // Batch in groups of 200 to avoid overly large IN clauses
+  const BATCH = 200;
+  let allSiblings = [];
+  for (let i = 0; i < parentIds.length; i += BATCH) {
+    const batch = parentIds.slice(i, i + BATCH);
+    const rows = await suiteQLAll(`
+      SELECT c.id, c.parent, c.email, c.custentity562, c.custentity563
+      FROM customer c
+      WHERE c.isinactive = 'F'
+        AND c.id IN (
+          SELECT id FROM customer WHERE parent IN (${batch.join(',')})
+        )
+        AND (
+          (c.email IS NOT NULL AND c.email != '')
+          OR (c.custentity562 IS NOT NULL AND c.custentity562 != '')
+          OR (c.custentity563 IS NOT NULL AND c.custentity563 != '')
+        )
+    `);
+    allSiblings = allSiblings.concat(rows);
   }
 
-  // Helper: extract domain from an email string
-  function getDomain(email) {
-    const parts = (email || '').toLowerCase().split('@');
-    return parts.length === 2 && parts[1] ? parts[1] : null;
+  // Build majority domain per parent from ALL siblings
+  const domainsByParent = {};
+  for (const s of allSiblings) {
+    const pid = String(s.parent);
+    const preferred = [s.custentity562, s.email, s.custentity563].find(e => e && e.trim());
+    if (!preferred) continue;
+    const domain = getDomain(preferred);
+    if (!domain) continue;
+    if (!domainsByParent[pid]) domainsByParent[pid] = [];
+    domainsByParent[pid].push(domain);
   }
 
-  // Group by parent
-  const byParent = {};
-  for (const r of rows) {
-    const pid = String(r.parent);
-    if (!byParent[pid]) byParent[pid] = [];
-    byParent[pid].push(r);
-  }
-
-  const flags = [];
-  for (const [parentId, siblings] of Object.entries(byParent)) {
-    if (siblings.length < 2) continue;
-
-    // Collect one representative domain per sibling (prefer custentity562, then email, then custentity563)
-    // for majority-domain voting — use each sibling's "primary invoice email" domain once
-    const siblingDomains = siblings.map(s => {
-      const preferred = [s.custentity562, s.email, s.custentity563].find(e => e && e.trim());
-      return preferred ? getDomain(preferred) : null;
-    }).filter(Boolean);
-
-    if (siblingDomains.length < 2) continue;
-
-    // Find the majority domain
+  const majorityByParent = {};
+  for (const [pid, domains] of Object.entries(domainsByParent)) {
+    if (domains.length < 2) continue;
     const freq = {};
-    for (const d of siblingDomains) freq[d] = (freq[d] || 0) + 1;
-    const majorityDomain = Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
-    const uniqueDomains = new Set(siblingDomains);
+    for (const d of domains) freq[d] = (freq[d] || 0) + 1;
+    majorityByParent[pid] = Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
+  }
 
-    if (uniqueDomains.size === 1) continue; // all same domain, fine
+  // Step 3: Flag candidates whose email domain doesn't match their parent's majority domain
+  const flags = [];
+  for (const r of candidates) {
+    const pid = String(r.parent);
+    const majorityDomain = majorityByParent[pid];
+    if (!majorityDomain) continue;
 
-    for (const r of siblings) {
-      const emails = getEmails(r);
-      // Flag if ANY of the account's emails uses a non-majority domain
-      const deviantEmails = emails.filter(e => {
-        const d = getDomain(e);
-        return d && d !== majorityDomain;
-      });
+    const emails = getEmails(r);
+    const deviantEmails = emails.filter(e => {
+      const d = getDomain(e);
+      return d && d !== majorityDomain;
+    });
 
-      if (deviantEmails.length > 0) {
-        const deviantDomains = [...new Set(deviantEmails.map(getDomain))];
-        flags.push({
-          customerId: String(r.id),
-          companyName: r.companyname,
-          category: r.category ? String(r.category) : null,
-          parentId,
-          ruleId: 4,
-          ruleLabel: 'Email Domain Mismatch vs. Siblings',
-          detail: `Email domain(s) "${deviantDomains.map(d => '@' + d).join(', ')}" differ from the majority domain "@${majorityDomain}" used by sibling sub-accounts under the same parent.`,
-          fields: {
-            email: r.email || '',
-            custentity562: r.custentity562 || '',
-            custentity563: r.custentity563 || '',
-            expectedDomain: majorityDomain,
-            siblingEmails: siblings
-              .filter(s => String(s.id) !== String(r.id))
-              .map(s => ({ id: String(s.id), companyname: s.companyname, email: getEmails(s).join(', ') }))
-              .filter(s => s.email),
-          },
-        });
-      }
-    }
+    if (deviantEmails.length === 0) continue;
+
+    const deviantDomains = [...new Set(deviantEmails.map(getDomain))];
+    const siblingContext = allSiblings
+      .filter(s => String(s.parent) === pid && String(s.id) !== String(r.id))
+      .map(s => ({ id: String(s.id), email: getEmails(s).join(', ') }))
+      .filter(s => s.email)
+      .slice(0, 10);
+
+    flags.push({
+      customerId: String(r.id),
+      companyName: r.companyname,
+      category: r.category ? String(r.category) : null,
+      parentId: pid,
+      ruleId: 4,
+      ruleLabel: 'Email Domain Mismatch vs. Siblings',
+      detail: `Email domain(s) "${deviantDomains.map(d => '@' + d).join(', ')}" differ from the majority domain "@${majorityDomain}" used by sibling sub-accounts under the same parent.`,
+      fields: {
+        email: r.email || '',
+        custentity562: r.custentity562 || '',
+        custentity563: r.custentity563 || '',
+        expectedDomain: majorityDomain,
+        siblingEmails: siblingContext,
+      },
+    });
   }
 
   return flags;
