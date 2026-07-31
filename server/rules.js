@@ -338,7 +338,6 @@ async function rule6_incompleteAddress() {
     const missing = [];
     const isBilling = r.defaultbilling === 'T';
     if (isBilling && (!r.addressee || r.addressee.trim() === '')) missing.push('Addressee');
-    if (isBilling && (!r.attention || r.attention.trim() === '')) missing.push('Attention');
     if (!r.addr1 || r.addr1.trim() === '') missing.push('Address 1');
     if (!r.city || r.city.trim() === '') missing.push('City');
     if (!r.state || r.state.trim() === '') missing.push('State');
