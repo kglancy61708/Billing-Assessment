@@ -192,7 +192,10 @@ async function rule4_emailDomainMismatch() {
     return parts.length === 2 && parts[1] ? parts[1] : null;
   }
 
-  // Step 1: Candidates — active sub-accounts with open invoices and at least one email
+  // Step 1: Candidates — active sub-accounts with open invoices and a primary email.
+  // Filter only on c.email (a known-valid WHERE column in SuiteQL); custentity562/563 are
+  // read in SELECT for JS processing but must NOT appear in the WHERE OR — SuiteQL silently
+  // returns 0 rows when those custom fields are used as compound OR filters.
   const candidates = await suiteQLAll(`
     SELECT c.id, c.companyname, c.category, c.parent,
            c.email, c.custentity562, c.custentity563
@@ -201,6 +204,8 @@ async function rule4_emailDomainMismatch() {
       AND c.entitystatus = 13
       AND LOWER(c.companyname) NOT LIKE '%test%'
       AND c.parent IS NOT NULL
+      AND c.email IS NOT NULL
+      AND c.email != ''
       AND EXISTS (
         SELECT 1 FROM transaction t
         WHERE t.entity = c.id
@@ -208,18 +213,13 @@ async function rule4_emailDomainMismatch() {
           AND t.voided = 'F'
           AND t.status = 'A'
       )
-      AND (
-        (c.email IS NOT NULL AND c.email != '')
-        OR (c.custentity562 IS NOT NULL AND c.custentity562 != '')
-        OR (c.custentity563 IS NOT NULL AND c.custentity563 != '')
-      )
   `);
+  console.log(`Rule 4: candidates=${candidates.length}`);
 
   if (candidates.length === 0) return [];
 
-  // Step 2: Fetch ALL active sub-accounts that have any email, using c.parent IS NOT NULL.
-  // This pattern correctly returns c.parent in the SELECT (confirmed working in SuiteQL).
-  // The c.id IN (SELECT ... WHERE parent IN (...)) pattern does NOT return c.parent correctly.
+  // Step 2: ALL active sub-accounts with a primary email — used to compute majority domain.
+  // Filter only on c.email in WHERE (same reason as Step 1).
   const candidateParentSet = new Set(candidates.map(r => String(r.parent)));
 
   const siblingPool = await suiteQLAll(`
@@ -227,12 +227,10 @@ async function rule4_emailDomainMismatch() {
     FROM customer c
     WHERE c.isinactive = 'F'
       AND c.parent IS NOT NULL
-      AND (
-        (c.email IS NOT NULL AND c.email != '')
-        OR (c.custentity562 IS NOT NULL AND c.custentity562 != '')
-        OR (c.custentity563 IS NOT NULL AND c.custentity563 != '')
-      )
+      AND c.email IS NOT NULL
+      AND c.email != ''
   `);
+  console.log(`Rule 4: siblingPool=${siblingPool.length}, candidateParents=${candidateParentSet.size}`);
 
   // Build majority domain per parent — only for parents that have candidates
   const domainsByParent = {};
@@ -271,7 +269,7 @@ async function rule4_emailDomainMismatch() {
     if (deviantEmails.length === 0) continue;
 
     const deviantDomains = [...new Set(deviantEmails.map(getDomain))];
-    const siblingContext = allSiblings
+    const siblingContext = siblingPool
       .filter(s => String(s.parent) === pid && String(s.id) !== String(r.id))
       .map(s => ({ id: String(s.id), email: getEmails(s).join(', ') }))
       .filter(s => s.email)
@@ -295,6 +293,7 @@ async function rule4_emailDomainMismatch() {
     });
   }
 
+  console.log(`Rule 4: flags=${flags.length}`);
   return flags;
 }
 

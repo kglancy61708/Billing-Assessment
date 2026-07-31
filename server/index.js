@@ -145,7 +145,16 @@ app.get('/api/flags', async (req, res) => {
         f.parentId != null &&
         String(review.parent_id) !== String(f.parentId);
 
-      const effectiveStatus = (!review || parentChanged) ? 'open' : review.status;
+      let effectiveStatus = (!review || parentChanged) ? 'open' : review.status;
+
+      // Rule 5: auto-reopen if new invoices without PO# have appeared since the flag was dismissed
+      if (effectiveStatus === 'dismissed' && f.ruleId === 5) {
+        const dismissedIds = new Set(
+          (review.flag_meta?.fields?.invoices || []).map(inv => String(inv.transactionId))
+        );
+        const hasNew = (f.fields?.invoices || []).some(inv => !dismissedIds.has(String(inv.transactionId)));
+        if (hasNew) effectiveStatus = 'open';
+      }
 
       return {
         ...f,
