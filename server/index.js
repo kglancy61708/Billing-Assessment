@@ -352,6 +352,73 @@ app.get('/api/diagnose/rule4', async (req, res) => {
   }
 });
 
+// GET /api/diagnose/rule4-run — run Rule 4 logic and return intermediate state for debugging
+app.get('/api/diagnose/rule4-run', async (req, res) => {
+  const { suiteQLAll } = require('./netsuite');
+  try {
+    function getDomain(email) {
+      const parts = (email || '').toLowerCase().split('@');
+      return parts.length === 2 && parts[1] ? parts[1] : null;
+    }
+    function getEmails(r) {
+      return [r.email, r.custentity562, r.custentity563].filter(e => e && e.trim() !== '');
+    }
+
+    // Step 1: candidates
+    const candidates = await suiteQLAll(`
+      SELECT c.id, c.companyname, c.parent, c.email, c.custentity562, c.custentity563
+      FROM customer c
+      WHERE c.isinactive = 'F'
+        AND c.entitystatus = 13
+        AND LOWER(c.companyname) NOT LIKE '%test%'
+        AND c.parent IS NOT NULL
+        AND EXISTS (SELECT 1 FROM transaction t WHERE t.entity = c.id AND t.type = 'CustInvc' AND t.voided = 'F' AND t.status = 'A')
+        AND ((c.email IS NOT NULL AND c.email != '') OR (c.custentity562 IS NOT NULL AND c.custentity562 != '') OR (c.custentity563 IS NOT NULL AND c.custentity563 != ''))
+    `);
+
+    const candidateParentSet = new Set(candidates.map(r => String(r.parent)));
+    const sampleCandidates = candidates.slice(0, 5).map(r => ({
+      id: r.id, companyname: r.companyname, parent: r.parent, parentStr: String(r.parent), email: r.email,
+    }));
+
+    // Step 2: sibling pool sample — just check a few rows
+    const siblingPoolSample = await suiteQLAll(`
+      SELECT c.id, c.parent, c.email FROM customer c
+      WHERE c.isinactive = 'F' AND c.parent IS NOT NULL
+        AND c.email IS NOT NULL AND c.email != ''
+      ORDER BY c.id
+    `);
+
+    const sampleSiblings = siblingPoolSample.slice(0, 5).map(s => ({
+      id: s.id, parent: s.parent, parentStr: String(s.parent), email: s.email,
+    }));
+
+    // Check specifically for parent 13120
+    const greystarSiblings = siblingPoolSample.filter(s => String(s.parent) === '13120');
+    const greystarDomains = {};
+    for (const s of greystarSiblings) {
+      const d = getDomain(s.email);
+      if (d) greystarDomains[d] = (greystarDomains[d] || 0) + 1;
+    }
+
+    // Check Lakeview Villas and Barrow specifically
+    const flagCandidates = candidates.filter(r => ['2893761','9319'].includes(String(r.id)));
+
+    res.json({
+      candidatesTotal: candidates.length,
+      sampleCandidates,
+      uniqueParentIds: [...candidateParentSet].slice(0, 20),
+      siblingPoolTotal: siblingPoolSample.length,
+      sampleSiblings,
+      greystarSiblingsCount: greystarSiblings.length,
+      greystarDomains,
+      lakviewAndBarrowInCandidates: flagCandidates.map(r => ({ id: r.id, name: r.companyname, parent: r.parent, parentStr: String(r.parent), email: r.email })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
+});
+
 // GET /api/diagnose/salesforce — verify SF connection and confirm custom field API names
 app.get('/api/diagnose/salesforce', async (req, res) => {
   try {
