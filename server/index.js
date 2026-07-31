@@ -262,6 +262,68 @@ app.get('/api/credentials', (req, res) => {
   });
 });
 
+// GET /api/diagnose/rule4?ids=2893761,9319 — debug Rule 4 for specific customer IDs
+app.get('/api/diagnose/rule4', async (req, res) => {
+  const { suiteQLAll } = require('./netsuite');
+  const ids = (req.query.ids || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (ids.length === 0) return res.status(400).json({ error: 'ids query param required' });
+
+  try {
+    // Check the customer fields directly
+    const customers = await suiteQLAll(`
+      SELECT c.id, c.companyname, c.parent, c.entitystatus, c.isinactive,
+             c.email, c.custentity562, c.custentity563
+      FROM customer c
+      WHERE c.id IN (${ids.join(',')})
+    `);
+
+    // Check open invoices for these customers
+    const invoices = await suiteQLAll(`
+      SELECT t.entity, COUNT(*) AS cnt
+      FROM transaction t
+      WHERE t.entity IN (${ids.join(',')})
+        AND t.type = 'CustInvc'
+        AND t.voided = 'F'
+        AND t.status = 'A'
+      GROUP BY t.entity
+    `);
+    const invoiceMap = {};
+    for (const row of invoices) invoiceMap[String(row.entity)] = row.cnt;
+
+    // If any have a parent, check how many siblings have emails
+    const parentIds = [...new Set(customers.map(c => c.parent).filter(Boolean))];
+    let siblings = [];
+    if (parentIds.length > 0) {
+      siblings = await suiteQLAll(`
+        SELECT c.id, c.companyname, c.parent, c.email, c.custentity562, c.custentity563
+        FROM customer c
+        WHERE c.parent IN (${parentIds.join(',')})
+          AND c.isinactive = 'F'
+          AND c.entitystatus = 13
+          AND (
+            (c.email IS NOT NULL AND c.email != '')
+            OR (c.custentity562 IS NOT NULL AND c.custentity562 != '')
+            OR (c.custentity563 IS NOT NULL AND c.custentity563 != '')
+          )
+      `);
+    }
+
+    res.json({
+      customers: customers.map(c => ({ ...c, openInvoices: invoiceMap[String(c.id)] || 0 })),
+      siblingsByParent: parentIds.map(pid => ({
+        parentId: pid,
+        count: siblings.filter(s => String(s.parent) === String(pid)).length,
+        siblings: siblings.filter(s => String(s.parent) === String(pid)).map(s => ({
+          id: s.id, companyname: s.companyname,
+          email: s.email, custentity562: s.custentity562, custentity563: s.custentity563,
+        })),
+      })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/diagnose — verifies NetSuite connectivity and SuiteQL table names
 app.get('/api/diagnose', async (req, res) => {
   const { suiteQL, listCustomersREST } = require('./netsuite');
