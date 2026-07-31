@@ -296,20 +296,36 @@ app.get('/api/diagnose/rule4', async (req, res) => {
     const invoiceMap = {};
     for (const row of invoices) invoiceMap[String(row.entity)] = row.cnt;
 
-    // If any have a parent, check how many siblings have emails
+    // Check all accounts under the same parent — no filters — to see what's there
     const parentIds = [...new Set(customers.map(c => c.parent).filter(Boolean))];
-    let siblings = [];
+    let allSiblings = [], filteredSiblings = [];
     if (parentIds.length > 0) {
-      siblings = await suiteQLAll(`
+      // No filters — see everything under the parent
+      allSiblings = await suiteQLAll(`
+        SELECT c.id, c.companyname, c.parent, c.entitystatus, c.isinactive,
+               c.email, c.custentity562, c.custentity563
+        FROM customer c
+        WHERE c.id IN (
+          SELECT id FROM customer WHERE parent IN (${parentIds.join(',')})
+        )
+      `);
+      // With all Rule 4 filters applied
+      filteredSiblings = await suiteQLAll(`
         SELECT c.id, c.companyname, c.parent, c.email, c.custentity562, c.custentity563
         FROM customer c
-        WHERE c.parent IN (${parentIds.join(',')})
-          AND c.isinactive = 'F'
+        WHERE c.isinactive = 'F'
           AND c.entitystatus = 13
+          AND c.id IN (
+            SELECT id FROM customer WHERE parent IN (${parentIds.join(',')})
+          )
           AND (
             (c.email IS NOT NULL AND c.email != '')
             OR (c.custentity562 IS NOT NULL AND c.custentity562 != '')
             OR (c.custentity563 IS NOT NULL AND c.custentity563 != '')
+          )
+          AND EXISTS (
+            SELECT 1 FROM transaction t
+            WHERE t.entity = c.id AND t.type = 'CustInvc' AND t.voided = 'F' AND t.status = 'A'
           )
       `);
     }
@@ -318,10 +334,16 @@ app.get('/api/diagnose/rule4', async (req, res) => {
       customers: customers.map(c => ({ ...c, openInvoices: invoiceMap[String(c.id)] || 0 })),
       siblingsByParent: parentIds.map(pid => ({
         parentId: pid,
-        count: siblings.filter(s => String(s.parent) === String(pid)).length,
-        siblings: siblings.filter(s => String(s.parent) === String(pid)).map(s => ({
+        allSiblingsCount: allSiblings.filter(s => String(s.parent) === String(pid)).length,
+        allSiblings: allSiblings.filter(s => String(s.parent) === String(pid)).map(s => ({
           id: s.id, companyname: s.companyname,
+          entitystatus: s.entitystatus, isinactive: s.isinactive,
           email: s.email, custentity562: s.custentity562, custentity563: s.custentity563,
+        })),
+        filteredSiblingsCount: filteredSiblings.filter(s => String(s.parent) === String(pid)).length,
+        filteredSiblings: filteredSiblings.filter(s => String(s.parent) === String(pid)).map(s => ({
+          id: s.id, companyname: s.companyname, email: s.email,
+          custentity562: s.custentity562, custentity563: s.custentity563,
         })),
       })),
     });
