@@ -423,21 +423,22 @@ async function runAllRules() {
     }
   }
 
-  // Resolve category display names in one batch query using BUILTIN.DF
-  const categoryIds = [...new Set(flags.map(f => f.category).filter(Boolean))];
-  if (categoryIds.length > 0) {
+  // Resolve category display names by customer ID using BUILTIN.DF
+  const flaggedCustomerIds = [...new Set(flags.map(f => f.customerId).filter(Boolean))];
+  if (flaggedCustomerIds.length > 0) {
     try {
       const rows = await suiteQLAll(`
-        SELECT DISTINCT category, BUILTIN.DF(category) AS catname
-        FROM customer WHERE category IN (${categoryIds.join(',')}) AND rownum <= 200
+        SELECT id, BUILTIN.DF(category) AS catname
+        FROM customer WHERE id IN (${flaggedCustomerIds.join(',')}) AND category IS NOT NULL
       `);
       const catNames = {};
-      for (const r of rows) if (r.category) catNames[String(r.category)] = r.catname;
+      for (const r of rows) if (r.catname) catNames[String(r.id)] = r.catname;
       for (const f of flags) {
-        if (f.category) f.categoryName = catNames[String(f.category)] || null;
+        f.categoryName = catNames[String(f.customerId)] || null;
       }
+      console.log(`Category names resolved for ${Object.keys(catNames).length} customers`);
     } catch (e) {
-      // Non-fatal — category names just won't show
+      console.warn('Category name resolution failed:', e.message);
     }
   }
 
