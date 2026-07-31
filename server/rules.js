@@ -217,36 +217,28 @@ async function rule4_emailDomainMismatch() {
 
   if (candidates.length === 0) return [];
 
-  // Step 2: For every parent group represented in candidates, fetch ALL active siblings
-  // (no invoice requirement) to compute the true majority domain.
-  // Use subquery to avoid direct c.parent IN (...) which has SuiteQL filter quirks.
-  const parentIds = [...new Set(candidates.map(r => String(r.parent)))];
+  // Step 2: Fetch ALL active sub-accounts that have any email, using c.parent IS NOT NULL.
+  // This pattern correctly returns c.parent in the SELECT (confirmed working in SuiteQL).
+  // The c.id IN (SELECT ... WHERE parent IN (...)) pattern does NOT return c.parent correctly.
+  const candidateParentSet = new Set(candidates.map(r => String(r.parent)));
 
-  // Batch in groups of 200 to avoid overly large IN clauses
-  const BATCH = 200;
-  let allSiblings = [];
-  for (let i = 0; i < parentIds.length; i += BATCH) {
-    const batch = parentIds.slice(i, i + BATCH);
-    const rows = await suiteQLAll(`
-      SELECT c.id, c.parent, c.email, c.custentity562, c.custentity563
-      FROM customer c
-      WHERE c.isinactive = 'F'
-        AND c.id IN (
-          SELECT id FROM customer WHERE parent IN (${batch.join(',')})
-        )
-        AND (
-          (c.email IS NOT NULL AND c.email != '')
-          OR (c.custentity562 IS NOT NULL AND c.custentity562 != '')
-          OR (c.custentity563 IS NOT NULL AND c.custentity563 != '')
-        )
-    `);
-    allSiblings = allSiblings.concat(rows);
-  }
+  const siblingPool = await suiteQLAll(`
+    SELECT c.id, c.parent, c.email, c.custentity562, c.custentity563
+    FROM customer c
+    WHERE c.isinactive = 'F'
+      AND c.parent IS NOT NULL
+      AND (
+        (c.email IS NOT NULL AND c.email != '')
+        OR (c.custentity562 IS NOT NULL AND c.custentity562 != '')
+        OR (c.custentity563 IS NOT NULL AND c.custentity563 != '')
+      )
+  `);
 
-  // Build majority domain per parent from ALL siblings
+  // Build majority domain per parent — only for parents that have candidates
   const domainsByParent = {};
-  for (const s of allSiblings) {
+  for (const s of siblingPool) {
     const pid = String(s.parent);
+    if (!candidateParentSet.has(pid)) continue;
     const preferred = [s.custentity562, s.email, s.custentity563].find(e => e && e.trim());
     if (!preferred) continue;
     const domain = getDomain(preferred);
