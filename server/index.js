@@ -7,6 +7,7 @@ const path = require('path');
 
 const { runAllRules, resolveB2BNames, getB2BCache } = require('./rules');
 const { getRecordUrl, createCustomerNote, getCustomerFields, updateCustomer, updateTransaction, updateCustomerAddress, getCustomerAddressbook } = require('./netsuite');
+const { getSFToken, findAccountByNetSuiteId, updateAccountAddress, getSFFieldConfig } = require('./salesforce');
 const {
   upsertReview,
   getReviewMap,
@@ -85,13 +86,18 @@ app.patch('/api/transaction/:id', async (req, res) => {
 });
 
 // PATCH /api/customer/:id/address/:addressbookId
+// Writes to Salesforce (which syncs to NetSuite automatically)
 app.patch('/api/customer/:id/address/:addressbookId', async (req, res) => {
   try {
-    const { id, addressbookId } = req.params;
+    const { id } = req.params;
     const { fields } = req.body;
     if (!fields) return res.status(400).json({ error: 'body.fields required' });
-    const result = await updateCustomerAddress(id, addressbookId, fields);
-    res.json(result);
+
+    const sfId = await findAccountByNetSuiteId(id);
+    if (!sfId) return res.status(404).json({ error: `No Salesforce Account found with NetSuite ID ${id}` });
+
+    const result = await updateAccountAddress(sfId, fields);
+    res.json({ ...result, sfAccountId: sfId });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -321,6 +327,27 @@ app.get('/api/diagnose/rule4', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/diagnose/salesforce — verify SF connection and confirm custom field API names
+app.get('/api/diagnose/salesforce', async (req, res) => {
+  try {
+    const token = await getSFToken();
+    const config = getSFFieldConfig();
+
+    // Describe the Account object and return fields relevant to addresses + the NS ID field
+    const url = `${token.instance_url}/services/data/v58.0/sobjects/Account/describe`;
+    const descRes = await fetch(url, { headers: { Authorization: `Bearer ${token.access_token}` } });
+    const desc = await descRes.json();
+
+    const relevant = (desc.fields || [])
+      .filter(f => /billing|attention|addressee|netsuite/i.test(f.name) || /billing|attention|addressee|netsuite/i.test(f.label))
+      .map(f => ({ name: f.name, label: f.label, type: f.type, updateable: f.updateable }));
+
+    res.json({ connected: true, instanceUrl: token.instance_url, fieldConfig: config, relevantFields: relevant });
+  } catch (err) {
+    res.status(500).json({ connected: false, error: err.message });
   }
 });
 
