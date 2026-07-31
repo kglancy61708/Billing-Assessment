@@ -35,8 +35,8 @@ async function getSFToken() {
 }
 
 // Find a Salesforce Account Id by the NetSuite customer ID stored in the "NetSuite Id (IO)" field
-// Field API name assumed: NetSuite_ID_IO__c — verify with /api/diagnose/salesforce
-const NS_ID_FIELD = process.env.SF_NS_ID_FIELD || 'NetSuite_ID_IO__c';
+// Field API name: celigo_sfnsio__NetSuite_Id__c (label: "NetSuite Id (IO)")
+const NS_ID_FIELD = process.env.SF_NS_ID_FIELD || 'celigo_sfnsio__NetSuite_Id__c';
 
 async function findAccountByNetSuiteId(netSuiteId) {
   const token = await getSFToken();
@@ -65,20 +65,31 @@ async function findAccountByNetSuiteId(netSuiteId) {
 //   city       → BillingCity
 //   state      → BillingState
 //   zip        → BillingPostalCode
-const SF_ATTENTION_FIELD = process.env.SF_ATTENTION_FIELD || 'Billing_Attention__c';
-const SF_ADDRESSEE_FIELD = process.env.SF_ADDRESSEE_FIELD || 'Billing_Addressee__c';
-
-async function updateAccountAddress(sfAccountId, addressFields) {
+// addressType is 'billing', 'shipping', or 'billing & shipping'
+async function updateAccountAddress(sfAccountId, addressFields, addressType = 'billing') {
   const token = await getSFToken();
   const url = `${token.instance_url}/services/data/v58.0/sobjects/Account/${sfAccountId}`;
 
+  const isBilling  = !addressType || addressType.includes('billing');
+  const isShipping = addressType.includes('shipping');
+
   const payload = {};
-  if (addressFields.attention  !== undefined) payload[SF_ATTENTION_FIELD] = addressFields.attention;
-  if (addressFields.addressee  !== undefined) payload[SF_ADDRESSEE_FIELD] = addressFields.addressee;
-  if (addressFields.addr1      !== undefined) payload.BillingStreet       = addressFields.addr1;
-  if (addressFields.city       !== undefined) payload.BillingCity         = addressFields.city;
-  if (addressFields.state      !== undefined) payload.BillingState        = addressFields.state;
-  if (addressFields.zip        !== undefined) payload.BillingPostalCode   = addressFields.zip;
+  if (isBilling) {
+    if (addressFields.attention !== undefined) payload['Billing_Attention__c']  = addressFields.attention;
+    if (addressFields.addressee !== undefined) payload['Billing_Addressee__c']  = addressFields.addressee;
+    if (addressFields.addr1     !== undefined) payload.BillingStreet            = addressFields.addr1;
+    if (addressFields.city      !== undefined) payload.BillingCity              = addressFields.city;
+    if (addressFields.state     !== undefined) payload.BillingState             = addressFields.state;
+    if (addressFields.zip       !== undefined) payload.BillingPostalCode        = addressFields.zip;
+  }
+  if (isShipping) {
+    if (addressFields.attention !== undefined) payload['Shipping_Attention__c'] = addressFields.attention;
+    if (addressFields.addressee !== undefined) payload['Shipping_Addressee__c'] = addressFields.addressee;
+    if (addressFields.addr1     !== undefined) payload.ShippingStreet           = addressFields.addr1;
+    if (addressFields.city      !== undefined) payload.ShippingCity             = addressFields.city;
+    if (addressFields.state     !== undefined) payload.ShippingState            = addressFields.state;
+    if (addressFields.zip       !== undefined) payload.ShippingPostalCode       = addressFields.zip;
+  }
 
   const res = await fetch(url, {
     method: 'PATCH',
@@ -99,7 +110,13 @@ async function updateAccountAddress(sfAccountId, addressFields) {
 
 // Return the field names the server is using (for diagnostics)
 function getSFFieldConfig() {
-  return { nsIdField: NS_ID_FIELD, attentionField: SF_ATTENTION_FIELD, addresseeField: SF_ADDRESSEE_FIELD };
+  return {
+    nsIdField: NS_ID_FIELD,
+    billingAttentionField: 'Billing_Attention__c',
+    billingAddresseeField: 'Billing_Addressee__c',
+    shippingAttentionField: 'Shipping_Attention__c',
+    shippingAddresseeField: 'Shipping_Addressee__c',
+  };
 }
 
 module.exports = { getSFToken, findAccountByNetSuiteId, updateAccountAddress, getSFFieldConfig };

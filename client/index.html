@@ -499,7 +499,7 @@ function renderEditPanel(f) {
               <div class="edit-row"><label>City</label><input type="text" class="edit-input" id="${sid}-city" value="${escHtml(addr.city||'')}" /></div>
               <div class="edit-row"><label>State</label>${renderStateSelect(`${sid}-state`, addr.state||'')}</div>
               <div class="edit-row"><label>Zip</label><input type="text" class="edit-input" id="${sid}-zip" value="${escHtml(addr.zip||'')}" /></div>
-              <button class="btn-save-ns" onclick="saveRule6Address('${f.customerId}','${escHtml(addr.type)}','${sid}')">Save Address to NetSuite</button>
+              <button class="btn-save-ns" onclick="saveRule6Address('${f.customerId}','${escHtml(addr.type)}','${sid}')">Save Address to Salesforce</button>
               <span class="edit-status" id="${sid}-estatus"></span>
             </div>`;
         }).join('')}
@@ -554,42 +554,29 @@ async function saveRule5Invoice(transactionId, id, idx) {
 
 async function saveRule6Address(customerId, addressType, sid) {
   const statusEl = document.getElementById(sid + '-estatus');
-  const flag = flags.find(f => String(f.customerId) === String(customerId) && f.ruleId === 6);
-  if (!flag) { if (statusEl) { statusEl.textContent = '✗ Flag not found'; statusEl.className = 'edit-status err'; } return; }
-
-  // Lazy-load addressbook line IDs from REST (not available via SuiteQL)
-  if (!flag._addressbookItems) {
-    if (statusEl) { statusEl.textContent = 'Looking up address…'; statusEl.className = 'edit-status'; }
-    try {
-      const data = await fetch(`/api/customer/${customerId}/addressbook`).then(r => r.json());
-      flag._addressbookItems = data.items || [];
-    } catch(e) {
-      if (statusEl) { statusEl.textContent = '✗ Could not load addresses: ' + e.message; statusEl.className = 'edit-status err'; }
-      return;
-    }
-  }
-
-  // Match the addressbook line by defaultbilling / defaultshipping
-  const isBilling = addressType.includes('billing');
-  const isShipping = addressType === 'shipping';
-  const item = flag._addressbookItems.find(i =>
-    (isBilling && i.defaultbilling) || (isShipping && i.defaultshipping)
-  );
-
-  if (!item) {
-    if (statusEl) { statusEl.textContent = '✗ Address line not found in NetSuite'; statusEl.className = 'edit-status err'; }
-    return;
-  }
+  if (statusEl) { statusEl.textContent = 'Saving…'; statusEl.className = 'edit-status'; }
 
   const fields = {
     attention: document.getElementById(`${sid}-attention`)?.value || '',
     addressee: document.getElementById(`${sid}-addressee`)?.value || '',
-    addr1: document.getElementById(`${sid}-addr1`)?.value || '',
-    city: document.getElementById(`${sid}-city`)?.value || '',
-    state: document.getElementById(`${sid}-state`)?.value || '',
-    zip: document.getElementById(`${sid}-zip`)?.value || '',
+    addr1:     document.getElementById(`${sid}-addr1`)?.value     || '',
+    city:      document.getElementById(`${sid}-city`)?.value      || '',
+    state:     document.getElementById(`${sid}-state`)?.value     || '',
+    zip:       document.getElementById(`${sid}-zip`)?.value       || '',
   };
-  await saveAddressFields(customerId, item.id, fields, sid);
+
+  try {
+    const res = await fetch(`/api/customer/${customerId}/address/sf`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields, addressType }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    if (statusEl) { statusEl.textContent = '✓ Saved to Salesforce'; statusEl.className = 'edit-status ok'; }
+  } catch (e) {
+    if (statusEl) { statusEl.textContent = '✗ ' + e.message; statusEl.className = 'edit-status err'; }
+  }
 }
 
 // Called when a card is expanded; handles lazy-load and B2B dropdown population

@@ -85,18 +85,18 @@ app.patch('/api/transaction/:id', async (req, res) => {
   }
 });
 
-// PATCH /api/customer/:id/address/:addressbookId
-// Writes to Salesforce (which syncs to NetSuite automatically)
+// PATCH /api/customer/:id/address/:addressbookId — legacy endpoint kept for compatibility
+// PATCH /api/customer/:id/address/sf — Rule 6: write billing/shipping address to Salesforce
 app.patch('/api/customer/:id/address/:addressbookId', async (req, res) => {
   try {
     const { id } = req.params;
-    const { fields } = req.body;
+    const { fields, addressType } = req.body;
     if (!fields) return res.status(400).json({ error: 'body.fields required' });
 
     const sfId = await findAccountByNetSuiteId(id);
     if (!sfId) return res.status(404).json({ error: `No Salesforce Account found with NetSuite ID ${id}` });
 
-    const result = await updateAccountAddress(sfId, fields);
+    const result = await updateAccountAddress(sfId, fields, addressType || 'billing');
     res.json({ ...result, sfAccountId: sfId });
   } catch (err) {
     console.error(err);
