@@ -222,7 +222,7 @@ async function rule4_emailDomainMismatch() {
   const candidateParentSet = new Set(candidates.map(r => String(r.parent)));
 
   const siblingPool = await suiteQLAll(`
-    SELECT c.id, c.parent, c.email, c.custentity562, c.custentity563
+    SELECT c.id, c.companyname, c.parent, c.email, c.custentity562, c.custentity563
     FROM customer c
     WHERE c.isinactive = 'F'
       AND c.parent IS NOT NULL
@@ -258,18 +258,26 @@ async function rule4_emailDomainMismatch() {
     const majorityDomain = majorityByParent[pid];
     if (!majorityDomain) continue;
 
-    const emails = getEmails(r);
-    const deviantEmails = emails.filter(e => {
-      const d = getDomain(e);
+    const emailFields = [
+      { key: 'email', label: 'Email', value: r.email },
+      { key: 'custentity562', label: 'Invoice Email #1', value: r.custentity562 },
+      { key: 'custentity563', label: 'Invoice Email #2', value: r.custentity563 },
+    ];
+
+    const deviantFields = emailFields.filter(ef => {
+      if (!ef.value || !ef.value.trim()) return false;
+      const d = getDomain(ef.value);
       return d && d !== majorityDomain;
     });
 
-    if (deviantEmails.length === 0) continue;
+    if (deviantFields.length === 0) continue;
 
-    const deviantDomains = [...new Set(deviantEmails.map(getDomain))];
+    const deviantSummary = deviantFields
+      .map(ef => `${ef.label} (@${getDomain(ef.value)})`)
+      .join(', ');
     const siblingContext = siblingPool
       .filter(s => String(s.parent) === pid && String(s.id) !== String(r.id))
-      .map(s => ({ id: String(s.id), email: getEmails(s).join(', ') }))
+      .map(s => ({ id: String(s.id), companyname: s.companyname || '', email: getEmails(s).join(', ') }))
       .filter(s => s.email)
       .slice(0, 10);
 
@@ -280,7 +288,7 @@ async function rule4_emailDomainMismatch() {
       parentId: pid,
       ruleId: 4,
       ruleLabel: 'Email Domain Mismatch vs. Siblings',
-      detail: `Email domain(s) "${deviantDomains.map(d => '@' + d).join(', ')}" differ from the majority domain "@${majorityDomain}" used by sibling sub-accounts under the same parent.`,
+      detail: `${deviantSummary} — domain differs from the majority "@${majorityDomain}" used by sibling sub-accounts.`,
       fields: {
         email: r.email || '',
         custentity562: r.custentity562 || '',

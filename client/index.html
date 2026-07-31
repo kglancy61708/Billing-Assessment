@@ -434,7 +434,7 @@ function renderEditPanel(f) {
   if (f.ruleId === 4) {
     const siblings = f.fields?.siblingEmails || [];
     const sibHtml = siblings.length
-      ? `<ul class="sibling-emails-list">${siblings.map(s => `<li>${s.companyname}: ${s.email}</li>`).join('')}</ul>`
+      ? `<ul class="sibling-emails-list">${siblings.map(s => `<li>${s.companyname || 'ID ' + s.id}: ${s.email}</li>`).join('')}</ul>`
       : `<p style="font-size:12px;color:#6b7280;font-style:italic">No sibling emails found.</p>`;
     return `
       <div class="edit-panel">
@@ -444,10 +444,18 @@ function renderEditPanel(f) {
           ${sibHtml}
         </div>
         <div class="edit-section">
-          <div class="edit-section-label">Correct this account's email</div>
+          <div class="edit-section-label">Correct this account's email fields</div>
           <div class="edit-row">
             <label>${FIELD_LABELS.email}</label>
-            <input type="text" class="edit-input" id="${id}-ef-email" value="${f.fields?.email || ''}" />
+            <input type="text" class="edit-input" id="${id}-ef-email" value="${escHtml(f.fields?.email || '')}" />
+          </div>
+          <div class="edit-row">
+            <label>${FIELD_LABELS.custentity562}</label>
+            <input type="text" class="edit-input" id="${id}-ef-custentity562" value="${escHtml(f.fields?.custentity562 || '')}" />
+          </div>
+          <div class="edit-row">
+            <label>${FIELD_LABELS.custentity563}</label>
+            <input type="text" class="edit-input" id="${id}-ef-custentity563" value="${escHtml(f.fields?.custentity563 || '')}" />
           </div>
           <button class="btn-save-ns" onclick="saveRule4('${f.customerId}','${id}')">Save to NetSuite</button>
           ${editStatusSpan(id)}
@@ -536,8 +544,14 @@ async function saveRule3(customerId, id) {
 }
 
 async function saveRule4(customerId, id) {
-  const email = document.getElementById(`${id}-ef-email`)?.value || '';
-  await saveCustomerFields(customerId, { email }, id);
+  const fields = {};
+  const email = document.getElementById(`${id}-ef-email`)?.value;
+  if (email !== undefined) fields.email = email;
+  const e562 = document.getElementById(`${id}-ef-custentity562`)?.value;
+  if (e562 !== undefined) fields.custentity562 = e562;
+  const e563 = document.getElementById(`${id}-ef-custentity563`)?.value;
+  if (e563 !== undefined) fields.custentity563 = e563;
+  await saveCustomerFields(customerId, fields, id);
 }
 
 async function saveRule5Customer(customerId, id) {
