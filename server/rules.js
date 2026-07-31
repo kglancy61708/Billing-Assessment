@@ -36,7 +36,7 @@ async function resolveB2BNames() {
 // Rule 1: Sub-account missing custentity310 when at least one sibling has it true
 async function rule1_missingOnlineInvoiceVsSiblings() {
   const rows = await suiteQLAll(`
-    SELECT c.id, c.companyname, c.parent, c.custentity310
+    SELECT c.id, c.companyname, c.parent, c.custentity310, c.category
     FROM customer c
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
@@ -90,6 +90,7 @@ async function rule1_missingOnlineInvoiceVsSiblings() {
     return {
       customerId: String(r.id),
       companyName: r.companyname,
+      category: r.category ? String(r.category) : null,
       parentId: pid,
       ruleId: 1,
       ruleLabel: 'Missing Online Invoice Service (vs. siblings)',
@@ -102,7 +103,7 @@ async function rule1_missingOnlineInvoiceVsSiblings() {
 // Rule 2: None of the three billing delivery methods are enabled
 async function rule2_noDeliveryMethodSet() {
   const rows = await suiteQLAll(`
-    SELECT c.id, c.companyname, c.printtransactions, c.custentity264, c.custentity310,
+    SELECT c.id, c.companyname, c.category, c.printtransactions, c.custentity264, c.custentity310,
            c.custentity571, c.custentity594, c.email, c.custentity562, c.custentity563,
            c.custentity531, c.custentity532
     FROM customer c
@@ -126,6 +127,7 @@ async function rule2_noDeliveryMethodSet() {
   return rows.map(r => ({
     customerId: String(r.id),
     companyName: r.companyname,
+    category: r.category ? String(r.category) : null,
     parentId: null,
     ruleId: 2,
     ruleLabel: 'No Invoice Delivery Method Set',
@@ -148,7 +150,7 @@ async function rule2_noDeliveryMethodSet() {
 // Rule 3: Invoices to Email is true but no email address on file
 async function rule3_emailFlagNoAddress() {
   const rows = await suiteQLAll(`
-    SELECT c.id, c.companyname, c.email, c.custentity264, c.custentity562, c.custentity563
+    SELECT c.id, c.companyname, c.category, c.email, c.custentity264, c.custentity562, c.custentity563
     FROM customer c
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
@@ -167,6 +169,7 @@ async function rule3_emailFlagNoAddress() {
   return rows.map(r => ({
     customerId: String(r.id),
     companyName: r.companyname,
+    category: r.category ? String(r.category) : null,
     parentId: null,
     ruleId: 3,
     ruleLabel: 'Invoices to Email — No Email Address',
@@ -178,7 +181,7 @@ async function rule3_emailFlagNoAddress() {
 // Rule 4: Email domain differs from sibling sub-accounts under the same parent
 async function rule4_emailDomainMismatch() {
   const rows = await suiteQLAll(`
-    SELECT c.id, c.companyname, c.parent, c.email
+    SELECT c.id, c.companyname, c.category, c.parent, c.email
     FROM customer c
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
@@ -229,6 +232,7 @@ async function rule4_emailDomainMismatch() {
         flags.push({
           customerId: String(r.id),
           companyName: r.companyname,
+          category: r.category ? String(r.category) : null,
           parentId,
           ruleId: 4,
           ruleLabel: 'Email Domain Mismatch vs. Siblings',
@@ -250,7 +254,7 @@ async function rule4_emailDomainMismatch() {
 // Rule 5: PO required but open invoices have no PO number
 async function rule5_poRequiredMissing() {
   const rows = await suiteQLAll(`
-    SELECT DISTINCT c.id, c.companyname, c.custentity_po_required,
+    SELECT DISTINCT c.id, c.companyname, c.category, c.custentity_po_required,
                     t.id AS transactionid, t.tranid, t.otherrefnum, t.trandate
     FROM customer c
     JOIN transaction t ON t.entity = c.id
@@ -279,7 +283,7 @@ async function rule5_poRequiredMissing() {
   for (const r of rows) {
     const cid = String(r.id);
     if (!byCustomer[cid]) {
-      byCustomer[cid] = { id: r.id, companyname: r.companyname, custentity_po_required: r.custentity_po_required, invoices: [] };
+      byCustomer[cid] = { id: r.id, companyname: r.companyname, category: r.category ? String(r.category) : null, custentity_po_required: r.custentity_po_required, invoices: [] };
     }
     byCustomer[cid].invoices.push({
       transactionId: String(r.transactionid),
@@ -292,6 +296,7 @@ async function rule5_poRequiredMissing() {
   return Object.values(byCustomer).map(c => ({
     customerId: String(c.id),
     companyName: c.companyname,
+    category: c.category || null,
     parentId: null,
     ruleId: 5,
     ruleLabel: 'PO Required — Invoices Missing PO#',
@@ -304,7 +309,7 @@ async function rule5_poRequiredMissing() {
 async function rule6_incompleteAddress() {
   // Query the customer address book — join to get default billing and shipping addresses
   const rows = await suiteQLAll(`
-    SELECT c.id, c.companyname,
+    SELECT c.id, c.companyname, c.category,
            ca.defaultbilling, ca.defaultshipping,
            a.addressee,
            a.attention,
@@ -332,7 +337,7 @@ async function rule6_incompleteAddress() {
   for (const r of rows) {
     const cid = String(r.id);
     if (!byCustomer[cid]) {
-      byCustomer[cid] = { id: r.id, companyname: r.companyname, addresses: [] };
+      byCustomer[cid] = { id: r.id, companyname: r.companyname, category: r.category ? String(r.category) : null, addresses: [] };
     }
 
     const missing = [];
@@ -367,6 +372,7 @@ async function rule6_incompleteAddress() {
     flags.push({
       customerId: String(c.id),
       companyName: c.companyname,
+      category: c.category || null,
       parentId: null,
       ruleId: 6,
       ruleLabel: 'Incomplete Shipping/Billing Address',
@@ -414,6 +420,24 @@ async function runAllRules() {
       }
     } catch (e) {
       // Non-fatal — parent names just won't show
+    }
+  }
+
+  // Resolve category display names in one batch query using BUILTIN.DF
+  const categoryIds = [...new Set(flags.map(f => f.category).filter(Boolean))];
+  if (categoryIds.length > 0) {
+    try {
+      const rows = await suiteQLAll(`
+        SELECT DISTINCT category, BUILTIN.DF(category) AS catname
+        FROM customer WHERE category IN (${categoryIds.join(',')}) AND rownum <= 200
+      `);
+      const catNames = {};
+      for (const r of rows) if (r.category) catNames[String(r.category)] = r.catname;
+      for (const f of flags) {
+        if (f.category) f.categoryName = catNames[String(f.category)] || null;
+      }
+    } catch (e) {
+      // Non-fatal — category names just won't show
     }
   }
 

@@ -80,6 +80,10 @@
       background:#e5e7eb; border-radius:4px; padding:1px 6px;
       margin-left:8px; font-size:11px;
     }
+    .category-tag {
+      background:#dbeafe; color:#1e40af; border-radius:4px; padding:1px 7px;
+      margin-left:8px; font-size:11px; font-weight:500;
+    }
     .card-right { display:flex; align-items:center; gap:8px; flex-shrink:0; }
     .rule-tag {
       background:#e0e7ff; color:#3730a3; border-radius:4px;
@@ -842,7 +846,7 @@ function renderCard(f) {
         <div class="card-left">
           <span class="chevron" id="${id}-chev">▸</span>
           <div>
-            <div class="company">${f.companyName}</div>
+            <div class="company">${f.companyName}${f.categoryName?`<span class="category-tag">${f.categoryName}</span>`:''}</div>
             <div class="meta">ID: ${f.customerId}${f.parentId?`<span class="parent-tag">Parent: ${f.parentId}</span>`:''}</div>
           </div>
         </div>
