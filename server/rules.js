@@ -205,7 +205,6 @@ async function rule4_emailDomainMismatch() {
       AND LOWER(c.companyname) NOT LIKE '%test%'
       AND c.parent IS NOT NULL
       AND c.email IS NOT NULL
-      AND c.email != ''
       AND EXISTS (
         SELECT 1 FROM transaction t
         WHERE t.entity = c.id
@@ -228,7 +227,6 @@ async function rule4_emailDomainMismatch() {
     WHERE c.isinactive = 'F'
       AND c.parent IS NOT NULL
       AND c.email IS NOT NULL
-      AND c.email != ''
   `);
   console.log(`Rule 4: siblingPool=${siblingPool.length}, candidateParents=${candidateParentSet.size}`);
 
