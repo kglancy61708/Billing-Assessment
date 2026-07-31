@@ -179,9 +179,11 @@ async function rule3_emailFlagNoAddress() {
 }
 
 // Rule 4: Email domain differs from sibling sub-accounts under the same parent
+// Checks c.email, custentity562 (Invoice Email #1), and custentity563 (Invoice Email #2)
 async function rule4_emailDomainMismatch() {
   const rows = await suiteQLAll(`
-    SELECT c.id, c.companyname, c.category, c.parent, c.email
+    SELECT c.id, c.companyname, c.category, c.parent,
+           c.email, c.custentity562, c.custentity563
     FROM customer c
     WHERE c.isinactive = 'F'
       AND c.entitystatus = 13
@@ -194,9 +196,23 @@ async function rule4_emailDomainMismatch() {
           AND t.status = 'A'
       )
       AND c.parent IS NOT NULL
-      AND c.email IS NOT NULL
-      AND c.email != ''
+      AND (
+        (c.email IS NOT NULL AND c.email != '')
+        OR (c.custentity562 IS NOT NULL AND c.custentity562 != '')
+        OR (c.custentity563 IS NOT NULL AND c.custentity563 != '')
+      )
   `);
+
+  // Helper: extract all non-null email addresses for a row
+  function getEmails(r) {
+    return [r.email, r.custentity562, r.custentity563].filter(e => e && e.trim() !== '');
+  }
+
+  // Helper: extract domain from an email string
+  function getDomain(email) {
+    const parts = (email || '').toLowerCase().split('@');
+    return parts.length === 2 && parts[1] ? parts[1] : null;
+  }
 
   // Group by parent
   const byParent = {};
@@ -210,25 +226,33 @@ async function rule4_emailDomainMismatch() {
   for (const [parentId, siblings] of Object.entries(byParent)) {
     if (siblings.length < 2) continue;
 
-    const domains = siblings.map(s => {
-      const parts = (s.email || '').toLowerCase().split('@');
-      return parts.length === 2 ? parts[1] : null;
+    // Collect one representative domain per sibling (prefer custentity562, then email, then custentity563)
+    // for majority-domain voting — use each sibling's "primary invoice email" domain once
+    const siblingDomains = siblings.map(s => {
+      const preferred = [s.custentity562, s.email, s.custentity563].find(e => e && e.trim());
+      return preferred ? getDomain(preferred) : null;
     }).filter(Boolean);
 
-    if (domains.length < 2) continue;
+    if (siblingDomains.length < 2) continue;
 
     // Find the majority domain
     const freq = {};
-    for (const d of domains) freq[d] = (freq[d] || 0) + 1;
+    for (const d of siblingDomains) freq[d] = (freq[d] || 0) + 1;
     const majorityDomain = Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
-    const uniqueDomains = new Set(domains);
+    const uniqueDomains = new Set(siblingDomains);
 
     if (uniqueDomains.size === 1) continue; // all same domain, fine
 
     for (const r of siblings) {
-      const emailParts = (r.email || '').toLowerCase().split('@');
-      const domain = emailParts.length === 2 ? emailParts[1] : null;
-      if (domain && domain !== majorityDomain) {
+      const emails = getEmails(r);
+      // Flag if ANY of the account's emails uses a non-majority domain
+      const deviantEmails = emails.filter(e => {
+        const d = getDomain(e);
+        return d && d !== majorityDomain;
+      });
+
+      if (deviantEmails.length > 0) {
+        const deviantDomains = [...new Set(deviantEmails.map(getDomain))];
         flags.push({
           customerId: String(r.id),
           companyName: r.companyname,
@@ -236,12 +260,16 @@ async function rule4_emailDomainMismatch() {
           parentId,
           ruleId: 4,
           ruleLabel: 'Email Domain Mismatch vs. Siblings',
-          detail: `Email domain "@${domain}" differs from the majority domain "@${majorityDomain}" used by sibling sub-accounts under the same parent.`,
+          detail: `Email domain(s) "${deviantDomains.map(d => '@' + d).join(', ')}" differ from the majority domain "@${majorityDomain}" used by sibling sub-accounts under the same parent.`,
           fields: {
-            email: r.email,
+            email: r.email || '',
+            custentity562: r.custentity562 || '',
+            custentity563: r.custentity563 || '',
             expectedDomain: majorityDomain,
-            siblingEmails: siblings.filter(s => String(s.id) !== String(r.id) && s.email)
-              .map(s => ({ id: String(s.id), companyname: s.companyname, email: s.email })),
+            siblingEmails: siblings
+              .filter(s => String(s.id) !== String(r.id))
+              .map(s => ({ id: String(s.id), companyname: s.companyname, email: getEmails(s).join(', ') }))
+              .filter(s => s.email),
           },
         });
       }
