@@ -475,11 +475,17 @@ async function rule7_soAddressMismatch() {
   if (rows.length === 0) {
     // Diagnostic: count all SalesOrd records to confirm query works
     try {
-      const types = await suiteQLAll(`SELECT type, COUNT(*) AS cnt FROM transaction GROUP BY type ORDER BY cnt DESC`);
-      console.log(`Rule 7 diag: transaction types = ${JSON.stringify(types.slice(0,15))}`);
-      const forms = await suiteQLAll(`SELECT customform, COUNT(*) AS cnt FROM transaction WHERE type IN ('SalesOrd','SalesOrder','salesorder') GROUP BY customform ORDER BY cnt DESC`);
-      console.log(`Rule 7 diag: SO customforms = ${JSON.stringify(forms.slice(0,10))}`);
-    } catch(e) { console.log(`Rule 7 diag failed: ${e.message}`); }
+      const sample = await suiteQLAll(`SELECT id, type, tranid, customform FROM transaction WHERE ROWNUM <= 10`);
+      console.log(`Rule 7 diag: sample txns = ${JSON.stringify(sample)}`);
+    } catch(e) { console.log(`Rule 7 diag sample failed: ${e.message}`); }
+    try {
+      const soSample = await suiteQLAll(`SELECT id, type, tranid, customform FROM transaction WHERE type = 'SalesOrd' AND ROWNUM <= 5`);
+      console.log(`Rule 7 diag: SalesOrd sample = ${JSON.stringify(soSample)}`);
+    } catch(e2) { console.log(`Rule 7 diag SalesOrd failed: ${e2.message}`); }
+    try {
+      const soSample2 = await suiteQLAll(`SELECT id, tranid, customform FROM salesorder WHERE ROWNUM <= 5`);
+      console.log(`Rule 7 diag: salesorder table sample = ${JSON.stringify(soSample2)}`);
+    } catch(e3) { console.log(`Rule 7 diag salesorder table failed: ${e3.message}`); }
   }
   if (rows.length === 0) return [];
 
