@@ -282,6 +282,7 @@ app.get('/api/credentials', (req, res) => {
 app.get('/api/salesorder/:id', async (req, res) => {
   try {
     const so = await getSalesOrder(req.params.id);
+    console.log(`SO ${req.params.id} dept=${JSON.stringify(so.department)} class=${JSON.stringify(so.class)} location=${JSON.stringify(so.location)}`);
 
     const listField = f => f && f.id ? { id: String(f.id), refName: f.refName || '' } : null;
 
