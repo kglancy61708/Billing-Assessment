@@ -6,7 +6,7 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 const { runAllRules, resolveB2BNames, getB2BCache } = require('./rules');
-const { getRecordUrl, getSalesOrderUrl, createCustomerNote, getCustomerFields, updateCustomer, updateTransaction, updateCustomerAddress, getCustomerAddressbook } = require('./netsuite');
+const { getRecordUrl, getSalesOrderUrl, createCustomerNote, getCustomerFields, updateCustomer, updateTransaction, updateCustomerAddress, getCustomerAddressbook, getSalesOrder, createSalesOrder, setSOEndDate } = require('./netsuite');
 const { getSFToken, findAccountByNetSuiteId, updateAccountAddress, getSFFieldConfig } = require('./salesforce');
 const {
   upsertReview,
@@ -276,6 +276,91 @@ app.get('/api/credentials', (req, res) => {
     NS_TOKEN_ID:        mask(process.env.NS_TOKEN_ID),
     NS_TOKEN_SECRET:    mask(process.env.NS_TOKEN_SECRET),
   });
+});
+
+// GET /api/salesorder/:id — fetch SO details (fields + line items) for the recreate workflow
+app.get('/api/salesorder/:id', async (req, res) => {
+  try {
+    const so = await getSalesOrder(req.params.id);
+
+    const listField = f => f && f.id ? { id: String(f.id), refName: f.refName || '' } : null;
+
+    const items = (so.item?.items || []).map(i => ({
+      line: i.line,
+      itemId: String(i.item?.id || ''),
+      itemName: i.item?.refName || '',
+      quantity: i.quantity ?? 0,
+      rate: i.rate ?? 0,
+      description: i.description || '',
+      amount: i.amount ?? 0,
+    }));
+
+    res.json({
+      soId: String(so.id),
+      tranId: so.tranid,
+      startdate: so.startdate || '',
+      fields: {
+        memo: so.memo || '',
+        custbody_approved: so.custbody_approved ?? false,
+        custbody_no_fuel: so.custbody_no_fuel ?? false,
+        custbody_subcustomer_noparent: so.custbody_subcustomer_noparent || '',
+        custbody2: listField(so.custbody2),
+        custbodycustom_del_location: listField(so.custbodycustom_del_location),
+        custbody123: so.custbody123 || '',
+        otherrefnum: so.otherrefnum || '',
+      },
+      items,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/salesorder/recreate — create new SO with updated address, set end date on old SO
+app.post('/api/salesorder/recreate', async (req, res) => {
+  try {
+    const { oldSoId, customerId, startdate, enddate, billingaddress, shippingaddress, fields, items } = req.body;
+    if (!oldSoId || !customerId || !startdate) {
+      return res.status(400).json({ error: 'oldSoId, customerId, and startdate are required' });
+    }
+
+    const payload = {
+      entity: { id: String(customerId) },
+      customform: { id: '101' },
+      startdate,
+      ...(enddate ? { enddate } : {}),
+      memo: fields.memo || '',
+      custbody_approved: !!fields.custbody_approved,
+      custbody_no_fuel: !!fields.custbody_no_fuel,
+      custbody_subcustomer_noparent: fields.custbody_subcustomer_noparent || '',
+      ...(fields.custbody2?.id ? { custbody2: { id: fields.custbody2.id } } : {}),
+      ...(fields.custbodycustom_del_location?.id ? { custbodycustom_del_location: { id: fields.custbodycustom_del_location.id } } : {}),
+      custbody123: fields.custbody123 || '',
+      otherrefnum: fields.otherrefnum || '',
+      billingaddress,
+      shippingaddress,
+      item: {
+        items: items.map(i => ({
+          item: { id: String(i.itemId) },
+          quantity: Number(i.quantity),
+          rate: Number(i.rate),
+          description: i.description || '',
+        })),
+      },
+    };
+
+    const newSoId = await createSalesOrder(payload);
+
+    // Set today's date as end date on old SO — stops the invoice script from generating more invoices
+    const today = new Date().toISOString().split('T')[0];
+    await setSOEndDate(oldSoId, today);
+
+    res.json({ newSoId, soUrl: getSalesOrderUrl(newSoId) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/diagnose/rule4?ids=2893761,9319 — debug Rule 4 for specific customer IDs

@@ -244,6 +244,65 @@ function getSalesOrderUrl(soId) {
   return `https://${acct}.app.netsuite.com/app/accounting/transactions/salesord.nl?id=${soId}`;
 }
 
+async function getSalesOrder(soId, retries = 6) {
+  const url = `${getBaseUrl()}/services/rest/record/v1/salesorder/${soId}?expandSubResources=true`;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const oauth = getOAuth();
+    const token = { key: NS_TOKEN_ID, secret: NS_TOKEN_SECRET };
+    const authData = oauth.authorize({ url, method: 'GET' }, token);
+    const authHeader = oauth.toHeader(authData);
+    authHeader.Authorization = authHeader.Authorization.replace('OAuth ', `OAuth realm="${NS_ACCOUNT_ID.toUpperCase()}",`);
+    const res = await fetch(url, { method: 'GET', headers: authHeader });
+    if (res.status === 429 && attempt < retries) { await sleep(5000 * (attempt + 1)); continue; }
+    if (!res.ok) { const text = await res.text(); throw new Error(`NetSuite getSalesOrder error ${res.status}: ${text}`); }
+    return res.json();
+  }
+}
+
+// Creates a new sales order; returns the new SO's internal ID (parsed from Location header)
+async function createSalesOrder(payload, retries = 6) {
+  const url = `${getBaseUrl()}/services/rest/record/v1/salesorder`;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const oauth = getOAuth();
+    const token = { key: NS_TOKEN_ID, secret: NS_TOKEN_SECRET };
+    const authData = oauth.authorize({ url, method: 'POST' }, token);
+    const authHeader = oauth.toHeader(authData);
+    authHeader.Authorization = authHeader.Authorization.replace('OAuth ', `OAuth realm="${NS_ACCOUNT_ID.toUpperCase()}",`);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { ...authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.status === 429 && attempt < retries) { await sleep(5000 * (attempt + 1)); continue; }
+    if (!res.ok) { const text = await res.text(); throw new Error(`NetSuite createSalesOrder error ${res.status}: ${text}`); }
+    // 204 — new ID is in the Location header e.g. /services/rest/record/v1/salesorder/12345
+    const loc = res.headers.get('location') || '';
+    const match = loc.match(/\/salesorder\/(\d+)/i);
+    if (!match) throw new Error(`createSalesOrder: cannot parse ID from Location: ${loc}`);
+    return match[1];
+  }
+}
+
+// Sets the end date on an existing SO to stop the invoice script from generating new invoices
+async function setSOEndDate(soId, endDate, retries = 6) {
+  const url = `${getBaseUrl()}/services/rest/record/v1/salesorder/${soId}`;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const oauth = getOAuth();
+    const token = { key: NS_TOKEN_ID, secret: NS_TOKEN_SECRET };
+    const authData = oauth.authorize({ url, method: 'PATCH' }, token);
+    const authHeader = oauth.toHeader(authData);
+    authHeader.Authorization = authHeader.Authorization.replace('OAuth ', `OAuth realm="${NS_ACCOUNT_ID.toUpperCase()}",`);
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: { ...authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enddate: endDate }),
+    });
+    if (res.status === 429 && attempt < retries) { await sleep(5000 * (attempt + 1)); continue; }
+    if (!res.ok) { const text = await res.text(); throw new Error(`NetSuite setSOEndDate error ${res.status}: ${text}`); }
+    return res.status === 204 ? { success: true } : res.json();
+  }
+}
+
 // Test REST Record API access to customer list
 async function listCustomersREST(limit = 3) {
   const url = `${getBaseUrl()}/services/rest/record/v1/customer?limit=${limit}`;
@@ -328,4 +387,4 @@ async function getFieldRefName(customerId, fieldName) {
   return val.refName || val.name || null;
 }
 
-module.exports = { suiteQL, suiteQLAll, updateCustomer, getRecordUrl, getSalesOrderUrl, listCustomersREST, createCustomerNote, getFieldRefName, getCustomerFields, updateTransaction, updateCustomerAddress, getCustomerAddressbook };
+module.exports = { suiteQL, suiteQLAll, updateCustomer, getRecordUrl, getSalesOrderUrl, listCustomersREST, createCustomerNote, getFieldRefName, getCustomerFields, updateTransaction, updateCustomerAddress, getCustomerAddressbook, getSalesOrder, createSalesOrder, setSOEndDate };

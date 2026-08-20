@@ -492,31 +492,23 @@ function renderEditPanel(f) {
   }
 
   if (f.ruleId === 7) {
-    const bil = f.fields?.billing;
-    const shi = f.fields?.shipping;
-    const renderAddrSection = (type, data, sid) => {
-      if (!data) return '';
-      const cur = data.customer || {};
-      return `
-        <div class="edit-section">
-          <div class="edit-section-label">Update customer ${type} address in Salesforce</div>
-          <div class="edit-row"><label>Addressee</label><input type="text" class="edit-input" id="${sid}-addressee" value="${escHtml(cur.addressee||'')}" /></div>
-          <div class="edit-row"><label>Address 1</label><input type="text" class="edit-input" id="${sid}-addr1" value="${escHtml(cur.addr1||'')}" /></div>
-          <div class="edit-row"><label>City</label><input type="text" class="edit-input" id="${sid}-city" value="${escHtml(cur.city||'')}" /></div>
-          <div class="edit-row"><label>State</label>${renderStateSelect(`${sid}-state`, cur.state||'')}</div>
-          <div class="edit-row"><label>Zip</label><input type="text" class="edit-input" id="${sid}-zip" value="${escHtml(cur.zip||'')}" /></div>
-          <button class="btn-save-ns" onclick="saveRule7Address('${f.customerId}','${type}','${sid}')">Save ${type.charAt(0).toUpperCase()+type.slice(1)} Address to Salesforce</button>
-          <span class="edit-status" id="${sid}-estatus"></span>
-        </div>`;
-    };
-    const bid = `${id}-bill`;
-    const sid2 = `${id}-ship`;
+    const soId = f.fields?.soId || '';
+    const custId = f.customerId;
+    const bil = f.fields?.billing?.customer || {};
+    const shi = f.fields?.shipping?.customer || {};
     return `
       <div class="edit-panel">
-        <div class="edit-panel-header">Correct customer address in Salesforce</div>
-        <p style="font-size:12px;color:#6b7280;margin:0 0 10px">After saving, close the sales order in NetSuite and create a new one so the updated address is stamped on future invoices.</p>
-        ${bil?.mismatch ? renderAddrSection('billing', bil, bid) : ''}
-        ${shi?.mismatch ? renderAddrSection('shipping', shi, sid2) : ''}
+        <div class="edit-panel-header">Recreate Sales Order</div>
+        <p style="font-size:12px;color:#6b7280;margin:0 0 12px">
+          Loads the existing SO's fields and line items for review. After you confirm, a new SO is created
+          with the corrected address and today's date is stamped as the end date on the old SO so no further
+          invoices are generated from it.
+        </p>
+        <button class="btn-save-ns" id="${id}-load-btn" onclick="loadSOForRecreate('${soId}','${custId}','${id}',${JSON.stringify(bil).replace(/"/g,'&quot;')},${JSON.stringify(shi).replace(/"/g,'&quot;')})">
+          Load Sales Order Details
+        </button>
+        <div id="${id}-recreate-loading" style="display:none;font-size:12px;color:#6b7280;padding:8px 0">Loading sales order…</div>
+        <div id="${id}-recreate-form"></div>
       </div>`;
   }
 
@@ -617,6 +609,156 @@ async function saveRule6Address(customerId, addressType, sid) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || res.statusText);
     if (statusEl) { statusEl.textContent = '✓ Saved to Salesforce'; statusEl.className = 'edit-status ok'; }
+  } catch (e) {
+    if (statusEl) { statusEl.textContent = '✗ ' + e.message; statusEl.className = 'edit-status err'; }
+  }
+}
+
+// Rule 7 — SO recreate workflow
+const _soCache = {};
+
+async function loadSOForRecreate(soId, customerId, cardId, custBilling, custShipping) {
+  const loadingEl = document.getElementById(`${cardId}-recreate-loading`);
+  const formEl    = document.getElementById(`${cardId}-recreate-form`);
+  const btnEl     = document.getElementById(`${cardId}-load-btn`);
+  if (btnEl) btnEl.style.display = 'none';
+  if (loadingEl) loadingEl.style.display = 'block';
+  if (formEl) formEl.innerHTML = '';
+
+  try {
+    const res = await fetch(`/api/salesorder/${soId}`);
+    const so = await res.json();
+    if (!res.ok) throw new Error(so.error || res.statusText);
+    _soCache[cardId] = { so, customerId, soId, custBilling, custShipping };
+    if (loadingEl) loadingEl.style.display = 'none';
+    formEl.innerHTML = buildRecreateForm(cardId, so, custBilling, custShipping);
+  } catch (e) {
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (formEl) formEl.innerHTML = `<p style="color:#dc2626;font-size:12px">Error: ${escHtml(e.message)}</p>`;
+    if (btnEl) btnEl.style.display = '';
+  }
+}
+
+function buildRecreateForm(cardId, so, custBilling, custShipping) {
+  const f = so.fields;
+  const addrInputs = (prefix, addr) => `
+    <div class="edit-row"><label>Addressee</label><input type="text" class="edit-input" id="${prefix}-addressee" value="${escHtml(addr.addressee||'')}" /></div>
+    <div class="edit-row"><label>Address 1</label><input type="text" class="edit-input" id="${prefix}-addr1" value="${escHtml(addr.addr1||'')}" /></div>
+    <div class="edit-row"><label>City</label><input type="text" class="edit-input" id="${prefix}-city" value="${escHtml(addr.city||'')}" /></div>
+    <div class="edit-row"><label>State</label>${renderStateSelect(`${prefix}-state`, addr.state||'')}</div>
+    <div class="edit-row"><label>Zip</label><input type="text" class="edit-input" id="${prefix}-zip" value="${escHtml(addr.zip||'')}" /></div>`;
+
+  const itemRows = so.items.map((item, idx) => `
+    <tr>
+      <td style="padding:4px 6px;font-size:12px">${escHtml(item.itemName)}</td>
+      <td style="padding:4px 6px"><input type="number" step="any" class="edit-input" id="${cardId}-item-${idx}-qty" value="${item.quantity}" style="width:70px" /></td>
+      <td style="padding:4px 6px"><input type="number" step="any" class="edit-input" id="${cardId}-item-${idx}-rate" value="${item.rate}" style="width:90px" /></td>
+      <td style="padding:4px 6px"><input type="text" class="edit-input" id="${cardId}-item-${idx}-desc" value="${escHtml(item.description)}" style="width:160px" /></td>
+    </tr>`).join('');
+
+  return `
+    <div class="edit-section" style="margin-top:12px">
+      <div class="edit-section-label">New Sales Order Dates</div>
+      <div class="edit-row"><label>Start Date <span style="color:#dc2626">*</span></label><input type="date" class="edit-input" id="${cardId}-new-startdate" /></div>
+      <div class="edit-row"><label>End Date</label><input type="date" class="edit-input" id="${cardId}-new-enddate" /></div>
+    </div>
+    <div class="edit-section">
+      <div class="edit-section-label">Billing Address (pre-filled from customer)</div>
+      ${addrInputs(`${cardId}-bill`, custBilling)}
+    </div>
+    <div class="edit-section">
+      <div class="edit-section-label">Shipping Address (pre-filled from customer)</div>
+      ${addrInputs(`${cardId}-ship`, custShipping)}
+    </div>
+    <div class="edit-section">
+      <div class="edit-section-label">Copied Order Fields</div>
+      <div class="edit-row"><label>Memo</label><input type="text" class="edit-input" id="${cardId}-f-memo" value="${escHtml(f.memo)}" /></div>
+      <div class="edit-row"><label>Invoice Approved</label><input type="checkbox" id="${cardId}-f-approved" ${f.custbody_approved?'checked':''} /></div>
+      <div class="edit-row"><label>No Fuel Surcharge</label><input type="checkbox" id="${cardId}-f-nofuel" ${f.custbody_no_fuel?'checked':''} /></div>
+      <div class="edit-row"><label>Customer #</label><input type="text" class="edit-input" id="${cardId}-f-subcust" value="${escHtml(f.custbody_subcustomer_noparent)}" /></div>
+      <div class="edit-row"><label>Order Type</label><span style="font-size:13px;color:#374151">${escHtml(f.custbody2?.refName||'—')}</span></div>
+      <div class="edit-row"><label>Delivery Location</label><span style="font-size:13px;color:#374151">${escHtml(f.custbodycustom_del_location?.refName||'—')}</span></div>
+      <div class="edit-row"><label>Customer PO</label><input type="text" class="edit-input" id="${cardId}-f-custbody123" value="${escHtml(f.custbody123)}" /></div>
+      <div class="edit-row"><label>PO#</label><input type="text" class="edit-input" id="${cardId}-f-otherrefnum" value="${escHtml(f.otherrefnum)}" /></div>
+    </div>
+    <div class="edit-section">
+      <div class="edit-section-label">Line Items — verify before confirming</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <tr style="background:#f3f4f6">
+          <th style="padding:4px 6px;text-align:left">Item</th>
+          <th style="padding:4px 6px;text-align:left">Qty</th>
+          <th style="padding:4px 6px;text-align:left">Rate</th>
+          <th style="padding:4px 6px;text-align:left">Description</th>
+        </tr>
+        ${itemRows}
+      </table>
+    </div>
+    <button class="btn-save-ns" onclick="submitSORecreate('${cardId}')">Confirm &amp; Create New Sales Order</button>
+    <span class="edit-status" id="${cardId}-recreate-status"></span>`;
+}
+
+async function submitSORecreate(cardId) {
+  const state = _soCache[cardId];
+  if (!state) return;
+  const { so, customerId, soId, custBilling, custShipping } = state;
+
+  const statusEl = document.getElementById(`${cardId}-recreate-status`);
+  if (statusEl) { statusEl.textContent = 'Creating…'; statusEl.className = 'edit-status'; }
+
+  const startdate = document.getElementById(`${cardId}-new-startdate`)?.value;
+  if (!startdate) {
+    if (statusEl) { statusEl.textContent = 'Start date is required.'; statusEl.className = 'edit-status err'; }
+    return;
+  }
+  const enddate = document.getElementById(`${cardId}-new-enddate`)?.value || null;
+
+  const getAddr = prefix => ({
+    addressee: document.getElementById(`${prefix}-addressee`)?.value || '',
+    addr1:     document.getElementById(`${prefix}-addr1`)?.value     || '',
+    city:      document.getElementById(`${prefix}-city`)?.value      || '',
+    state:     document.getElementById(`${prefix}-state`)?.value     || '',
+    zip:       document.getElementById(`${prefix}-zip`)?.value       || '',
+  });
+
+  const items = so.items.map((item, idx) => ({
+    itemId: item.itemId,
+    quantity: document.getElementById(`${cardId}-item-${idx}-qty`)?.value ?? item.quantity,
+    rate:     document.getElementById(`${cardId}-item-${idx}-rate`)?.value ?? item.rate,
+    description: document.getElementById(`${cardId}-item-${idx}-desc`)?.value ?? item.description,
+  }));
+
+  const fields = {
+    memo:                          document.getElementById(`${cardId}-f-memo`)?.value        || '',
+    custbody_approved:             document.getElementById(`${cardId}-f-approved`)?.checked  ?? false,
+    custbody_no_fuel:              document.getElementById(`${cardId}-f-nofuel`)?.checked    ?? false,
+    custbody_subcustomer_noparent: document.getElementById(`${cardId}-f-subcust`)?.value     || '',
+    custbody2:                     so.fields.custbody2,
+    custbodycustom_del_location:   so.fields.custbodycustom_del_location,
+    custbody123:                   document.getElementById(`${cardId}-f-custbody123`)?.value || '',
+    otherrefnum:                   document.getElementById(`${cardId}-f-otherrefnum`)?.value || '',
+  };
+
+  try {
+    const res = await fetch('/api/salesorder/recreate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        oldSoId: soId,
+        customerId,
+        startdate,
+        enddate,
+        billingaddress:  getAddr(`${cardId}-bill`),
+        shippingaddress: getAddr(`${cardId}-ship`),
+        fields,
+        items,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    if (statusEl) {
+      statusEl.innerHTML = `✓ New SO created — <a href="${data.soUrl}" target="_blank">Open SO ${data.newSoId} in NetSuite ↗</a>. Old SO end-dated today.`;
+      statusEl.className = 'edit-status ok';
+    }
   } catch (e) {
     if (statusEl) { statusEl.textContent = '✗ ' + e.message; statusEl.className = 'edit-status err'; }
   }
