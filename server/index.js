@@ -308,6 +308,8 @@ app.get('/api/salesorder/:id', async (req, res) => {
         custbodycustom_del_location: listField(so.custbodycustom_del_location),
         custbody123: so.custbody123 || '',
         otherrefnum: so.otherrefnum || '',
+        department: listField(so.department),
+        class: listField(so.class),
       },
       items,
     });
@@ -338,6 +340,8 @@ app.post('/api/salesorder/recreate', async (req, res) => {
       ...(fields.custbodycustom_del_location?.id ? { custbodycustom_del_location: { id: fields.custbodycustom_del_location.id } } : {}),
       ...(fields.custbody123 ? { custbody123: fields.custbody123 } : {}),
       otherrefnum: fields.otherrefnum || '',
+      ...(fields.department?.id ? { department: { id: fields.department.id } } : {}),
+      ...(fields.class?.id ? { class: { id: fields.class.id } } : {}),
       billingaddress,
       shippingaddress,
       item: {
