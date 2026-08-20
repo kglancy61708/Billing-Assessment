@@ -438,33 +438,28 @@ async function rule6_incompleteAddress() {
 
 // Rule 7: Water Management sales order address doesn't match current customer address.
 // Two-step approach: SuiteQL for active SOs + customer addresses, then a separate
-// transactionaddressbook query for the SO's stamped addresses.
-// t.billaddr1 etc. are NOT valid SuiteQL columns — SO addresses must be fetched separately.
+// t.billingaddress and t.shippingaddress are numeric IDs joinable to customeraddressbookentityaddress.
+// t.billaddr1 etc. do NOT exist. transactionaddressbook is isolated (no joinable columns).
 async function rule7_soAddressMismatch() {
-  // Step 1: active WM SOs + their customers' current default addresses
   const rows = await suiteQLAll(`
     SELECT t.id AS soid, t.tranid, t.entity,
            c.companyname, c.category,
-           ab.addressee AS c_bill_addressee,
-           ab.addr1     AS c_bill_addr1,
-           ab.city      AS c_bill_city,
-           ab.state     AS c_bill_state,
-           ab.zip       AS c_bill_zip,
-           sb.addressee AS c_ship_addressee,
-           sb.addr1     AS c_ship_addr1,
-           sb.city      AS c_ship_city,
-           sb.state     AS c_ship_state,
-           sb.zip       AS c_ship_zip
+           ab.addressee AS c_bill_addressee, ab.addr1 AS c_bill_addr1,
+           ab.city AS c_bill_city, ab.state AS c_bill_state, ab.zip AS c_bill_zip,
+           sb.addressee AS c_ship_addressee, sb.addr1 AS c_ship_addr1,
+           sb.city AS c_ship_city, sb.state AS c_ship_state, sb.zip AS c_ship_zip,
+           ba.addressee AS so_bill_addressee, ba.addr1 AS so_bill_addr1,
+           ba.city AS so_bill_city, ba.state AS so_bill_state, ba.zip AS so_bill_zip,
+           sa.addressee AS so_ship_addressee, sa.addr1 AS so_ship_addr1,
+           sa.city AS so_ship_city, sa.state AS so_ship_state, sa.zip AS so_ship_zip
     FROM transaction t
     JOIN customer c ON c.id = t.entity
-    LEFT JOIN customeraddressbook cab
-           ON cab.entity = c.id AND cab.defaultbilling = 'T'
-    LEFT JOIN customeraddressbookentityaddress ab
-           ON ab.nkey = cab.addressbookaddress
-    LEFT JOIN customeraddressbook cas
-           ON cas.entity = c.id AND cas.defaultshipping = 'T'
-    LEFT JOIN customeraddressbookentityaddress sb
-           ON sb.nkey = cas.addressbookaddress
+    LEFT JOIN customeraddressbook cab ON cab.entity = c.id AND cab.defaultbilling = 'T'
+    LEFT JOIN customeraddressbookentityaddress ab ON ab.nkey = cab.addressbookaddress
+    LEFT JOIN customeraddressbook cas ON cas.entity = c.id AND cas.defaultshipping = 'T'
+    LEFT JOIN customeraddressbookentityaddress sb ON sb.nkey = cas.addressbookaddress
+    LEFT JOIN customeraddressbookentityaddress ba ON ba.nkey = t.billingaddress
+    LEFT JOIN customeraddressbookentityaddress sa ON sa.nkey = t.shippingaddress
     WHERE t.type = 'SalesOrd'
       AND t.customform = '101'
       AND t.enddate IS NULL
@@ -472,39 +467,13 @@ async function rule7_soAddressMismatch() {
   `);
 
   console.log(`Rule 7: active WM SOs = ${rows.length}`);
-  if (rows.length === 0) {
-    // Diagnostic: count all SalesOrd records to confirm query works
-    try {
-      const sample = await suiteQLAll(`SELECT id, type, tranid, customform FROM transaction WHERE ROWNUM <= 10`);
-      console.log(`Rule 7 diag: sample txns = ${JSON.stringify(sample)}`);
-    } catch(e) { console.log(`Rule 7 diag sample failed: ${e.message}`); }
-    try {
-      const soSample = await suiteQLAll(`SELECT id, type, tranid, customform FROM transaction WHERE type = 'SalesOrd' AND ROWNUM <= 5`);
-      console.log(`Rule 7 diag: SalesOrd sample = ${JSON.stringify(soSample)}`);
-    } catch(e2) { console.log(`Rule 7 diag SalesOrd failed: ${e2.message}`); }
-    try {
-      const soSample2 = await suiteQLAll(`SELECT id, tranid, customform FROM salesorder WHERE ROWNUM <= 5`);
-      console.log(`Rule 7 diag: salesorder table sample = ${JSON.stringify(soSample2)}`);
-    } catch(e3) { console.log(`Rule 7 diag salesorder table failed: ${e3.message}`); }
-  }
   if (rows.length === 0) return [];
-
-  // Step 2: probe transaction table for address column names on a SalesOrd
-  const soIds = [...new Set(rows.map(r => String(r.soid)))];
-  const soAddresses = {};
-  try {
-    const txnProbe = await suiteQLAll(`SELECT * FROM transaction WHERE type = 'SalesOrd' AND ROWNUM <= 1`);
-    const cols = txnProbe.length > 0 ? Object.keys(txnProbe[0]).filter(k => k.toLowerCase().includes('addr') || k.toLowerCase().includes('bill') || k.toLowerCase().includes('ship')).join(',') : 'no rows';
-    console.log(`Rule 7 diag: transaction addr/bill/ship cols = ${cols}`);
-    console.log(`Rule 7 diag: full row sample = ${JSON.stringify(txnProbe[0])}`);
-  } catch(ep) { console.log(`Rule 7 diag: transaction probe failed — ${ep.message}`); }
-  return [];
 
   const norm = s => (s || '').trim().toLowerCase();
   const ADDR_FIELDS = ['addressee', 'addr1', 'city', 'state', 'zip'];
 
   function mismatchedFields(soAddr, custAddr) {
-    if (!soAddr) return [];
+    if (!soAddr || ADDR_FIELDS.every(f => !soAddr[f])) return [];
     return ADDR_FIELDS.filter(f => norm(soAddr[f]) !== norm(custAddr[f]));
   }
 
@@ -512,12 +481,13 @@ async function rule7_soAddressMismatch() {
 
   for (const r of rows) {
     const sid = String(r.soid);
-    const soAddr = soAddresses[sid] || {};
     const custBill = { addressee: r.c_bill_addressee, addr1: r.c_bill_addr1, city: r.c_bill_city, state: r.c_bill_state, zip: r.c_bill_zip };
     const custShip = { addressee: r.c_ship_addressee, addr1: r.c_ship_addr1, city: r.c_ship_city, state: r.c_ship_state, zip: r.c_ship_zip };
+    const soBill   = { addressee: r.so_bill_addressee, addr1: r.so_bill_addr1, city: r.so_bill_city, state: r.so_bill_state, zip: r.so_bill_zip };
+    const soShip   = { addressee: r.so_ship_addressee, addr1: r.so_ship_addr1, city: r.so_ship_city, state: r.so_ship_state, zip: r.so_ship_zip };
 
-    const billDiffs = mismatchedFields(soAddr.billing, custBill);
-    const shipDiffs = mismatchedFields(soAddr.shipping, custShip);
+    const billDiffs = mismatchedFields(soBill, custBill);
+    const shipDiffs = mismatchedFields(soShip, custShip);
 
     if (billDiffs.length === 0 && shipDiffs.length === 0) continue;
 
@@ -535,18 +505,8 @@ async function rule7_soAddressMismatch() {
         soId: sid,
         soTranId: r.tranid,
         soUrl: getSalesOrderUrl(sid),
-        billing: {
-          mismatch: billDiffs.length > 0,
-          diffFields: billDiffs,
-          so: soAddr.billing || {},
-          customer: custBill,
-        },
-        shipping: {
-          mismatch: shipDiffs.length > 0,
-          diffFields: shipDiffs,
-          so: soAddr.shipping || {},
-          customer: custShip,
-        },
+        billing: { mismatch: billDiffs.length > 0, diffFields: billDiffs, so: soBill, customer: custBill },
+        shipping: { mismatch: shipDiffs.length > 0, diffFields: shipDiffs, so: soShip, customer: custShip },
       },
     });
   }
