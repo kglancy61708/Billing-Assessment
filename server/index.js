@@ -6,7 +6,7 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 const { runAllRules, resolveB2BNames, getB2BCache } = require('./rules');
-const { getRecordUrl, createCustomerNote, getCustomerFields, updateCustomer, updateTransaction, updateCustomerAddress, getCustomerAddressbook } = require('./netsuite');
+const { getRecordUrl, getSalesOrderUrl, createCustomerNote, getCustomerFields, updateCustomer, updateTransaction, updateCustomerAddress, getCustomerAddressbook } = require('./netsuite');
 const { getSFToken, findAccountByNetSuiteId, updateAccountAddress, getSFFieldConfig } = require('./salesforce');
 const {
   upsertReview,
@@ -159,6 +159,7 @@ app.get('/api/flags', async (req, res) => {
       return {
         ...f,
         netsuiteUrl: getRecordUrl(f.customerId),
+        soUrl: f.ruleId === 7 ? getSalesOrderUrl(f.fields?.soId) : undefined,
         status: effectiveStatus,
         note: parentChanged ? null : (review?.note || null),
         reviewedBy: parentChanged ? null : (review?.reviewed_by || null),

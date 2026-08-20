@@ -197,7 +197,7 @@
 </div>
 
 <script>
-const RULE_COLORS = { 1:'#dbeafe', 2:'#fce7f3', 3:'#ffedd5', 4:'#ede9fe', 5:'#fef9c3', 6:'#dcfce7' };
+const RULE_COLORS = { 1:'#dbeafe', 2:'#fce7f3', 3:'#ffedd5', 4:'#ede9fe', 5:'#fef9c3', 6:'#dcfce7', 7:'#fef2f2' };
 
 const FIELD_LABELS = {
   printtransactions: 'Print Transactions',
@@ -491,6 +491,35 @@ function renderEditPanel(f) {
       </div>`;
   }
 
+  if (f.ruleId === 7) {
+    const bil = f.fields?.billing;
+    const shi = f.fields?.shipping;
+    const renderAddrSection = (type, data, sid) => {
+      if (!data) return '';
+      const cur = data.customer || {};
+      return `
+        <div class="edit-section">
+          <div class="edit-section-label">Update customer ${type} address in Salesforce</div>
+          <div class="edit-row"><label>Addressee</label><input type="text" class="edit-input" id="${sid}-addressee" value="${escHtml(cur.addressee||'')}" /></div>
+          <div class="edit-row"><label>Address 1</label><input type="text" class="edit-input" id="${sid}-addr1" value="${escHtml(cur.addr1||'')}" /></div>
+          <div class="edit-row"><label>City</label><input type="text" class="edit-input" id="${sid}-city" value="${escHtml(cur.city||'')}" /></div>
+          <div class="edit-row"><label>State</label>${renderStateSelect(`${sid}-state`, cur.state||'')}</div>
+          <div class="edit-row"><label>Zip</label><input type="text" class="edit-input" id="${sid}-zip" value="${escHtml(cur.zip||'')}" /></div>
+          <button class="btn-save-ns" onclick="saveRule7Address('${f.customerId}','${type}','${sid}')">Save ${type.charAt(0).toUpperCase()+type.slice(1)} Address to Salesforce</button>
+          <span class="edit-status" id="${sid}-estatus"></span>
+        </div>`;
+    };
+    const bid = `${id}-bill`;
+    const sid2 = `${id}-ship`;
+    return `
+      <div class="edit-panel">
+        <div class="edit-panel-header">Correct customer address in Salesforce</div>
+        <p style="font-size:12px;color:#6b7280;margin:0 0 10px">After saving, close the sales order in NetSuite and create a new one so the updated address is stamped on future invoices.</p>
+        ${bil?.mismatch ? renderAddrSection('billing', bil, bid) : ''}
+        ${shi?.mismatch ? renderAddrSection('shipping', shi, sid2) : ''}
+      </div>`;
+  }
+
   if (f.ruleId === 6) {
     const addresses = f.fields?.addresses || [];
     return `
@@ -593,6 +622,30 @@ async function saveRule6Address(customerId, addressType, sid) {
   }
 }
 
+async function saveRule7Address(customerId, addressType, sid) {
+  const statusEl = document.getElementById(sid + '-estatus');
+  if (statusEl) { statusEl.textContent = 'Saving…'; statusEl.className = 'edit-status'; }
+  const fields = {
+    addressee: document.getElementById(`${sid}-addressee`)?.value || '',
+    addr1:     document.getElementById(`${sid}-addr1`)?.value     || '',
+    city:      document.getElementById(`${sid}-city`)?.value      || '',
+    state:     document.getElementById(`${sid}-state`)?.value     || '',
+    zip:       document.getElementById(`${sid}-zip`)?.value       || '',
+  };
+  try {
+    const res = await fetch(`/api/customer/${customerId}/address/sf`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields, addressType }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    if (statusEl) { statusEl.textContent = '✓ Saved to Salesforce'; statusEl.className = 'edit-status ok'; }
+  } catch (e) {
+    if (statusEl) { statusEl.textContent = '✗ ' + e.message; statusEl.className = 'edit-status err'; }
+  }
+}
+
 // Called when a card is expanded; handles lazy-load and B2B dropdown population
 async function onCardOpen(f) {
   const id = `card-${f.customerId}-${f.ruleId}`;
@@ -620,6 +673,7 @@ const RULE_LABELS = {
   1:'Missing Online Invoice vs. Siblings', 2:'No Delivery Method',
   3:'Email Flag, No Address', 4:'Email Domain Mismatch',
   5:'PO Required, Missing on Invoice', 6:'Incomplete Address',
+  7:'Sales Order Address Mismatch',
 };
 
 let flags = [];
@@ -702,7 +756,7 @@ function renderToolbar() {
       </select>
       <select class="select-filter" data-rule onchange="ruleFilter=this.value;renderAll()">
         <option value="">All Rules</option>
-        ${[1,2,3,4,5,6].map(r=>`<option value="${r}" ${ruleFilter==r?'selected':''}>${RULE_LABELS[r]}</option>`).join('')}
+        ${[1,2,3,4,5,6,7].map(r=>`<option value="${r}" ${ruleFilter==r?'selected':''}>${RULE_LABELS[r]}</option>`).join('')}
       </select>
       <span class="result-count">${visible} flag${visible!==1?'s':''}</span>
     </div>`;
@@ -826,6 +880,35 @@ function renderFieldDetails(f) {
     </div>`;
   }
 
+  if (ruleId===7) {
+    const addrRow = (label, soVal, custVal, isMismatch) => {
+      const hilite = isMismatch ? 'background:#fef2f2;' : '';
+      return `<tr style="${hilite}">
+        <td style="padding:3px 8px;font-weight:500">${label}</td>
+        <td style="padding:3px 8px;color:${isMismatch?'#dc2626':'#374151'}">${escHtml(soVal||'—')}</td>
+        <td style="padding:3px 8px;color:${isMismatch?'#059669':'#374151'}">${escHtml(custVal||'—')}</td>
+      </tr>`;
+    };
+    const sections = [];
+    const ADDR_LABELS = { addressee:'Addressee', addr1:'Address 1', city:'City', state:'State', zip:'Zip' };
+    for (const type of ['billing','shipping']) {
+      const side = fields[type];
+      if (!side || !side.mismatch) continue;
+      const diffs = new Set(side.diffFields || []);
+      sections.push(`
+        <div style="font-weight:600;margin:8px 0 4px;text-transform:capitalize">${type} address</div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <tr style="background:#f3f4f6">
+            <th style="padding:4px 8px;text-align:left">Field</th>
+            <th style="padding:4px 8px;text-align:left">Sales Order</th>
+            <th style="padding:4px 8px;text-align:left">Customer (current)</th>
+          </tr>
+          ${Object.entries(ADDR_LABELS).map(([f,l]) => addrRow(l, side.so[f], side.customer[f], diffs.has(f))).join('')}
+        </table>`);
+    }
+    return `<div class="field-box"><div style="font-weight:600;margin-bottom:6px">SO ${fields.soTranId} vs. current customer address</div>${sections.join('')}</div>`;
+  }
+
   const entries = Object.entries(fields).filter(([,v])=>v!==null&&v!==undefined&&!Array.isArray(v)&&typeof v!=='object');
   if (!entries.length) return '';
   return `<div class="field-box">
@@ -855,6 +938,7 @@ function renderCard(f) {
           <span class="rule-tag">Rule ${f.ruleId}</span>
           <span class="status-badge ${sc[f.status]}" id="${id}-badge">${ss[f.status]}</span>
           <a class="ns-link" href="${f.netsuiteUrl}" target="_blank" onclick="event.stopPropagation()">Open in NetSuite ↗</a>
+          ${f.soUrl ? `<a class="ns-link" href="${f.soUrl}" target="_blank" onclick="event.stopPropagation()" style="margin-left:8px">View Sales Order ↗</a>` : ''}
         </div>
       </div>
       <div class="card-body" id="${id}-body">

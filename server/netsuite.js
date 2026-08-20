@@ -239,6 +239,11 @@ function getRecordUrl(customerId) {
   return `https://${acct}.app.netsuite.com/app/common/entity/custjob.nl?id=${customerId}`;
 }
 
+function getSalesOrderUrl(soId) {
+  const acct = NS_ACCOUNT_ID.replace(/_/g, '-').toLowerCase();
+  return `https://${acct}.app.netsuite.com/app/accounting/transactions/salesord.nl?id=${soId}`;
+}
+
 // Test REST Record API access to customer list
 async function listCustomersREST(limit = 3) {
   const url = `${getBaseUrl()}/services/rest/record/v1/customer?limit=${limit}`;
@@ -323,4 +328,4 @@ async function getFieldRefName(customerId, fieldName) {
   return val.refName || val.name || null;
 }
 
-module.exports = { suiteQL, suiteQLAll, updateCustomer, getRecordUrl, listCustomersREST, createCustomerNote, getFieldRefName, getCustomerFields, updateTransaction, updateCustomerAddress, getCustomerAddressbook };
+module.exports = { suiteQL, suiteQLAll, updateCustomer, getRecordUrl, getSalesOrderUrl, listCustomersREST, createCustomerNote, getFieldRefName, getCustomerFields, updateTransaction, updateCustomerAddress, getCustomerAddressbook };

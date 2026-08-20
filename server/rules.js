@@ -1,4 +1,4 @@
-const { suiteQLAll } = require('./netsuite');
+const { suiteQLAll, getSalesOrderUrl } = require('./netsuite');
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -436,6 +436,114 @@ async function rule6_incompleteAddress() {
   return flags;
 }
 
+// Rule 7: Water Management sales order address doesn't match current customer address
+// Catches accounts where a customer address was updated but the recurring SO still has the old address.
+// Form 101 = Water Management custom form; enddate IS NULL = active recurring order;
+// transactionline.isclosed = 'F' = at least one open line (order not fully closed).
+async function rule7_soAddressMismatch() {
+  const rows = await suiteQLAll(`
+    SELECT t.id AS soid, t.tranid, t.entity,
+           c.companyname, c.category,
+           t.billaddr1, t.billcity, t.billstate, t.billzip, t.billaddressee,
+           t.shipaddr1, t.shipcity, t.shipstate, t.shipzip, t.shipaddressee,
+           ab.addressee  AS c_bill_addressee,
+           ab.addr1      AS c_bill_addr1,
+           ab.city       AS c_bill_city,
+           ab.state      AS c_bill_state,
+           ab.zip        AS c_bill_zip,
+           sb.addressee  AS c_ship_addressee,
+           sb.addr1      AS c_ship_addr1,
+           sb.city       AS c_ship_city,
+           sb.state      AS c_ship_state,
+           sb.zip        AS c_ship_zip
+    FROM transaction t
+    JOIN customer c ON c.id = t.entity
+    LEFT JOIN customeraddressbook cab
+           ON cab.entity = c.id AND cab.defaultbilling = 'T'
+    LEFT JOIN customeraddressbookentityaddress ab
+           ON ab.nkey = cab.addressbookaddress
+    LEFT JOIN customeraddressbook cas
+           ON cas.entity = c.id AND cas.defaultshipping = 'T'
+    LEFT JOIN customeraddressbookentityaddress sb
+           ON sb.nkey = cas.addressbookaddress
+    WHERE t.type = 'SalesOrd'
+      AND t.customform = 101
+      AND t.enddate IS NULL
+      AND c.isinactive = 'F'
+      AND EXISTS (
+        SELECT 1 FROM transactionline tl
+        WHERE tl.transaction = t.id AND tl.isclosed = 'F'
+      )
+  `);
+
+  console.log(`Rule 7: active WM sales orders found = ${rows.length}`);
+
+  const norm = s => (s || '').trim().toLowerCase();
+
+  function mismatchedFields(soVals, custVals) {
+    const FIELDS = ['addressee', 'addr1', 'city', 'state', 'zip'];
+    return FIELDS.filter(f => norm(soVals[f]) !== norm(custVals[f]));
+  }
+
+  const flags = [];
+
+  for (const r of rows) {
+    const soBill = {
+      addressee: r.billaddressee, addr1: r.billaddr1,
+      city: r.billcity, state: r.billstate, zip: r.billzip,
+    };
+    const custBill = {
+      addressee: r.c_bill_addressee, addr1: r.c_bill_addr1,
+      city: r.c_bill_city, state: r.c_bill_state, zip: r.c_bill_zip,
+    };
+    const soShip = {
+      addressee: r.shipaddressee, addr1: r.shipaddr1,
+      city: r.shipcity, state: r.shipstate, zip: r.shipzip,
+    };
+    const custShip = {
+      addressee: r.c_ship_addressee, addr1: r.c_ship_addr1,
+      city: r.c_ship_city, state: r.c_ship_state, zip: r.c_ship_zip,
+    };
+
+    const billDiffs = mismatchedFields(soBill, custBill);
+    const shipDiffs = mismatchedFields(soShip, custShip);
+
+    if (billDiffs.length === 0 && shipDiffs.length === 0) continue;
+
+    const which = [billDiffs.length && 'billing', shipDiffs.length && 'shipping'].filter(Boolean).join(' and ');
+
+    flags.push({
+      customerId: String(r.entity),
+      companyName: r.companyname,
+      category: r.category ? String(r.category) : null,
+      parentId: null,
+      ruleId: 7,
+      ruleLabel: 'Sales Order Address Mismatch',
+      detail: `${which.charAt(0).toUpperCase() + which.slice(1)} address on Water Management SO ${r.tranid} differs from the current customer address. Update the customer address in Salesforce, then close and recreate the sales order in NetSuite.`,
+      fields: {
+        soId: String(r.soid),
+        soTranId: r.tranid,
+        soUrl: getSalesOrderUrl(r.soid),
+        billing: {
+          mismatch: billDiffs.length > 0,
+          diffFields: billDiffs,
+          so: soBill,
+          customer: custBill,
+        },
+        shipping: {
+          mismatch: shipDiffs.length > 0,
+          diffFields: shipDiffs,
+          so: soShip,
+          customer: custShip,
+        },
+      },
+    });
+  }
+
+  console.log(`Rule 7: flags = ${flags.length}`);
+  return flags;
+}
+
 const RULES = [
   rule1_missingOnlineInvoiceVsSiblings,
   rule2_noDeliveryMethodSet,
@@ -443,6 +551,7 @@ const RULES = [
   rule4_emailDomainMismatch,
   rule5_poRequiredMissing,
   rule6_incompleteAddress,
+  rule7_soAddressMismatch,
 ];
 
 async function runAllRules() {
