@@ -490,26 +490,33 @@ async function rule7_soAddressMismatch() {
   if (rows.length === 0) return [];
 
   // Step 2: SO stamped billing/shipping addresses via transactionaddressbook
-  const soIdList = [...new Set(rows.map(r => String(r.soid)))].join(',');
+  // Batch into chunks of 200 to avoid NetSuite IN-clause size limits
+  const soIds = [...new Set(rows.map(r => String(r.soid)))];
   const soAddresses = {};
+  const BATCH = 200;
   try {
-    const addrRows = await suiteQLAll(`
-      SELECT tab.transaction AS soid,
-             tab.defaultbilling, tab.defaultshipping,
-             a.addressee, a.addr1, a.city, a.state, a.zip
-      FROM transactionaddressbook tab
-      JOIN customeraddressbookentityaddress a ON a.nkey = tab.addressbookaddress
-      WHERE tab.transaction IN (${soIdList})
-        AND (tab.defaultbilling = 'T' OR tab.defaultshipping = 'T')
-    `);
-    console.log(`Rule 7: SO address rows = ${addrRows.length}`);
-    for (const ar of addrRows) {
-      const sid = String(ar.soid);
-      if (!soAddresses[sid]) soAddresses[sid] = {};
-      const addr = { addressee: ar.addressee, addr1: ar.addr1, city: ar.city, state: ar.state, zip: ar.zip };
-      if (ar.defaultbilling === 'T') soAddresses[sid].billing = addr;
-      if (ar.defaultshipping === 'T') soAddresses[sid].shipping = addr;
+    let totalAddrRows = 0;
+    for (let i = 0; i < soIds.length; i += BATCH) {
+      const chunk = soIds.slice(i, i + BATCH).join(',');
+      const addrRows = await suiteQLAll(`
+        SELECT tab.transaction AS soid,
+               tab.defaultbilling, tab.defaultshipping,
+               a.addressee, a.addr1, a.city, a.state, a.zip
+        FROM transactionaddressbook tab
+        JOIN customeraddressbookentityaddress a ON a.nkey = tab.addressbookaddress
+        WHERE tab.transaction IN (${chunk})
+          AND (tab.defaultbilling = 'T' OR tab.defaultshipping = 'T')
+      `);
+      totalAddrRows += addrRows.length;
+      for (const ar of addrRows) {
+        const sid = String(ar.soid);
+        if (!soAddresses[sid]) soAddresses[sid] = {};
+        const addr = { addressee: ar.addressee, addr1: ar.addr1, city: ar.city, state: ar.state, zip: ar.zip };
+        if (ar.defaultbilling === 'T') soAddresses[sid].billing = addr;
+        if (ar.defaultshipping === 'T') soAddresses[sid].shipping = addr;
+      }
     }
+    console.log(`Rule 7: SO address rows = ${totalAddrRows}`);
   } catch (e) {
     console.error(`Rule 7: transactionaddressbook query failed — ${e.message}`);
     return [];
