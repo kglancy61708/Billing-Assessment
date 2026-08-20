@@ -466,12 +466,23 @@ async function rule7_soAddressMismatch() {
     LEFT JOIN customeraddressbookentityaddress sb
            ON sb.nkey = cas.addressbookaddress
     WHERE t.type = 'SalesOrd'
-      AND t.customform = 101
+      AND t.customform = '101'
       AND t.enddate IS NULL
       AND c.isinactive = 'F'
   `);
 
   console.log(`Rule 7: active WM SOs = ${rows.length}`);
+  if (rows.length === 0) {
+    // Diagnostic: count all SalesOrd records to confirm query works
+    try {
+      const allSOs = await suiteQLAll(`SELECT COUNT(*) AS cnt FROM transaction WHERE type = 'SalesOrd'`);
+      console.log(`Rule 7 diag: total SalesOrd count = ${JSON.stringify(allSOs[0])}`);
+      const withForm = await suiteQLAll(`SELECT COUNT(*) AS cnt FROM transaction WHERE type = 'SalesOrd' AND customform = '101'`);
+      console.log(`Rule 7 diag: SalesOrd with customform='101' = ${JSON.stringify(withForm[0])}`);
+      const noEnd = await suiteQLAll(`SELECT COUNT(*) AS cnt FROM transaction WHERE type = 'SalesOrd' AND customform = '101' AND enddate IS NULL`);
+      console.log(`Rule 7 diag: ...and enddate IS NULL = ${JSON.stringify(noEnd[0])}`);
+    } catch(e) { console.log(`Rule 7 diag failed: ${e.message}`); }
+  }
   if (rows.length === 0) return [];
 
   // Step 2: SO stamped billing/shipping addresses via transactionaddressbook
