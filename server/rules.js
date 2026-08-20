@@ -489,29 +489,15 @@ async function rule7_soAddressMismatch() {
   }
   if (rows.length === 0) return [];
 
-  // Step 2: SO stamped billing/shipping addresses via transactionaddressbook + entityaddress
+  // Step 2: probe transaction table for address column names on a SalesOrd
   const soIds = [...new Set(rows.map(r => String(r.soid)))];
   const soAddresses = {};
-  // Probe: try to get transaction FK and join entityaddress on internalid
   try {
-    const probe2 = await suiteQLAll(`
-      SELECT tab.transaction, tab.internalid, tab.defaultbilling, tab.defaultshipping,
-             ea.addressee, ea.addr1, ea.city, ea.state, ea.zip
-      FROM transactionaddressbook tab
-      JOIN entityaddress ea ON ea.nkey = tab.internalid
-      WHERE ROWNUM <= 3
-    `);
-    console.log(`Rule 7 diag: tab+entityaddress probe = ${JSON.stringify(probe2)}`);
-  } catch(ep2) {
-    console.log(`Rule 7 diag: tab+entityaddress probe failed — ${ep2.message}`);
-    // Try without the join to see if 'transaction' column exists
-    try {
-      const probe3 = await suiteQLAll(`SELECT transaction, internalid, defaultbilling, defaultshipping FROM transactionaddressbook WHERE ROWNUM <= 3`);
-      console.log(`Rule 7 diag: tab transaction col = ${JSON.stringify(probe3)}`);
-    } catch(ep3) { console.log(`Rule 7 diag: tab transaction col failed — ${ep3.message}`); }
-    return [];
-  }
-  console.log(`Rule 7: SO address step skipped — probe succeeded, build real query next`);
+    const txnProbe = await suiteQLAll(`SELECT * FROM transaction WHERE type = 'SalesOrd' AND ROWNUM <= 1`);
+    const cols = txnProbe.length > 0 ? Object.keys(txnProbe[0]).filter(k => k.toLowerCase().includes('addr') || k.toLowerCase().includes('bill') || k.toLowerCase().includes('ship')).join(',') : 'no rows';
+    console.log(`Rule 7 diag: transaction addr/bill/ship cols = ${cols}`);
+    console.log(`Rule 7 diag: full row sample = ${JSON.stringify(txnProbe[0])}`);
+  } catch(ep) { console.log(`Rule 7 diag: transaction probe failed — ${ep.message}`); }
   return [];
 
   const norm = s => (s || '').trim().toLowerCase();
