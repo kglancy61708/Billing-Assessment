@@ -436,26 +436,25 @@ async function rule6_incompleteAddress() {
   return flags;
 }
 
-// Rule 7: Water Management sales order address doesn't match current customer address
-// Catches accounts where a customer address was updated but the recurring SO still has the old address.
-// Form 101 = Water Management custom form; enddate IS NULL = active recurring order;
-// transactionline.isclosed = 'F' = at least one open line (order not fully closed).
+// Rule 7: Water Management sales order address doesn't match current customer address.
+// Two-step approach: SuiteQL for active SOs + customer addresses, then a separate
+// transactionaddressbook query for the SO's stamped addresses.
+// t.billaddr1 etc. are NOT valid SuiteQL columns — SO addresses must be fetched separately.
 async function rule7_soAddressMismatch() {
+  // Step 1: active WM SOs + their customers' current default addresses
   const rows = await suiteQLAll(`
     SELECT t.id AS soid, t.tranid, t.entity,
            c.companyname, c.category,
-           t.billaddr1, t.billcity, t.billstate, t.billzip, t.billaddressee,
-           t.shipaddr1, t.shipcity, t.shipstate, t.shipzip, t.shipaddressee,
-           ab.addressee  AS c_bill_addressee,
-           ab.addr1      AS c_bill_addr1,
-           ab.city       AS c_bill_city,
-           ab.state      AS c_bill_state,
-           ab.zip        AS c_bill_zip,
-           sb.addressee  AS c_ship_addressee,
-           sb.addr1      AS c_ship_addr1,
-           sb.city       AS c_ship_city,
-           sb.state      AS c_ship_state,
-           sb.zip        AS c_ship_zip
+           ab.addressee AS c_bill_addressee,
+           ab.addr1     AS c_bill_addr1,
+           ab.city      AS c_bill_city,
+           ab.state     AS c_bill_state,
+           ab.zip       AS c_bill_zip,
+           sb.addressee AS c_ship_addressee,
+           sb.addr1     AS c_ship_addr1,
+           sb.city      AS c_ship_city,
+           sb.state     AS c_ship_state,
+           sb.zip       AS c_ship_zip
     FROM transaction t
     JOIN customer c ON c.id = t.entity
     LEFT JOIN customeraddressbook cab
@@ -470,43 +469,55 @@ async function rule7_soAddressMismatch() {
       AND t.customform = 101
       AND t.enddate IS NULL
       AND c.isinactive = 'F'
-      AND EXISTS (
-        SELECT 1 FROM transactionline tl
-        WHERE tl.transaction = t.id AND tl.isclosed = 'F'
-      )
   `);
 
-  console.log(`Rule 7: active WM sales orders found = ${rows.length}`);
+  console.log(`Rule 7: active WM SOs = ${rows.length}`);
+  if (rows.length === 0) return [];
+
+  // Step 2: SO stamped billing/shipping addresses via transactionaddressbook
+  const soIdList = [...new Set(rows.map(r => String(r.soid)))].join(',');
+  const soAddresses = {};
+  try {
+    const addrRows = await suiteQLAll(`
+      SELECT tab.transaction AS soid,
+             tab.defaultbilling, tab.defaultshipping,
+             a.addressee, a.addr1, a.city, a.state, a.zip
+      FROM transactionaddressbook tab
+      JOIN customeraddressbookentityaddress a ON a.nkey = tab.addressbookaddress
+      WHERE tab.transaction IN (${soIdList})
+        AND (tab.defaultbilling = 'T' OR tab.defaultshipping = 'T')
+    `);
+    console.log(`Rule 7: SO address rows = ${addrRows.length}`);
+    for (const ar of addrRows) {
+      const sid = String(ar.soid);
+      if (!soAddresses[sid]) soAddresses[sid] = {};
+      const addr = { addressee: ar.addressee, addr1: ar.addr1, city: ar.city, state: ar.state, zip: ar.zip };
+      if (ar.defaultbilling === 'T') soAddresses[sid].billing = addr;
+      if (ar.defaultshipping === 'T') soAddresses[sid].shipping = addr;
+    }
+  } catch (e) {
+    console.error(`Rule 7: transactionaddressbook query failed — ${e.message}`);
+    return [];
+  }
 
   const norm = s => (s || '').trim().toLowerCase();
+  const ADDR_FIELDS = ['addressee', 'addr1', 'city', 'state', 'zip'];
 
-  function mismatchedFields(soVals, custVals) {
-    const FIELDS = ['addressee', 'addr1', 'city', 'state', 'zip'];
-    return FIELDS.filter(f => norm(soVals[f]) !== norm(custVals[f]));
+  function mismatchedFields(soAddr, custAddr) {
+    if (!soAddr) return [];
+    return ADDR_FIELDS.filter(f => norm(soAddr[f]) !== norm(custAddr[f]));
   }
 
   const flags = [];
 
   for (const r of rows) {
-    const soBill = {
-      addressee: r.billaddressee, addr1: r.billaddr1,
-      city: r.billcity, state: r.billstate, zip: r.billzip,
-    };
-    const custBill = {
-      addressee: r.c_bill_addressee, addr1: r.c_bill_addr1,
-      city: r.c_bill_city, state: r.c_bill_state, zip: r.c_bill_zip,
-    };
-    const soShip = {
-      addressee: r.shipaddressee, addr1: r.shipaddr1,
-      city: r.shipcity, state: r.shipstate, zip: r.shipzip,
-    };
-    const custShip = {
-      addressee: r.c_ship_addressee, addr1: r.c_ship_addr1,
-      city: r.c_ship_city, state: r.c_ship_state, zip: r.c_ship_zip,
-    };
+    const sid = String(r.soid);
+    const soAddr = soAddresses[sid] || {};
+    const custBill = { addressee: r.c_bill_addressee, addr1: r.c_bill_addr1, city: r.c_bill_city, state: r.c_bill_state, zip: r.c_bill_zip };
+    const custShip = { addressee: r.c_ship_addressee, addr1: r.c_ship_addr1, city: r.c_ship_city, state: r.c_ship_state, zip: r.c_ship_zip };
 
-    const billDiffs = mismatchedFields(soBill, custBill);
-    const shipDiffs = mismatchedFields(soShip, custShip);
+    const billDiffs = mismatchedFields(soAddr.billing, custBill);
+    const shipDiffs = mismatchedFields(soAddr.shipping, custShip);
 
     if (billDiffs.length === 0 && shipDiffs.length === 0) continue;
 
@@ -519,21 +530,21 @@ async function rule7_soAddressMismatch() {
       parentId: null,
       ruleId: 7,
       ruleLabel: 'Sales Order Address Mismatch',
-      detail: `${which.charAt(0).toUpperCase() + which.slice(1)} address on Water Management SO ${r.tranid} differs from the current customer address. Update the customer address in Salesforce, then close and recreate the sales order in NetSuite.`,
+      detail: `${which.charAt(0).toUpperCase() + which.slice(1)} address on Water Management SO ${r.tranid} differs from the current customer address. Recreate the sales order to stamp the corrected address on future invoices.`,
       fields: {
-        soId: String(r.soid),
+        soId: sid,
         soTranId: r.tranid,
-        soUrl: getSalesOrderUrl(r.soid),
+        soUrl: getSalesOrderUrl(sid),
         billing: {
           mismatch: billDiffs.length > 0,
           diffFields: billDiffs,
-          so: soBill,
+          so: soAddr.billing || {},
           customer: custBill,
         },
         shipping: {
           mismatch: shipDiffs.length > 0,
           diffFields: shipDiffs,
-          so: soShip,
+          so: soAddr.shipping || {},
           customer: custShip,
         },
       },
