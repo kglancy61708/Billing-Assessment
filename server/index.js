@@ -336,7 +336,7 @@ app.post('/api/salesorder/recreate', async (req, res) => {
       custbody_subcustomer_noparent: fields.custbody_subcustomer_noparent || '',
       ...(fields.custbody2?.id ? { custbody2: { id: fields.custbody2.id } } : {}),
       ...(fields.custbodycustom_del_location?.id ? { custbodycustom_del_location: { id: fields.custbodycustom_del_location.id } } : {}),
-      custbody123: fields.custbody123 || '',
+      ...(fields.custbody123 ? { custbody123: fields.custbody123 } : {}),
       otherrefnum: fields.otherrefnum || '',
       billingaddress,
       shippingaddress,
