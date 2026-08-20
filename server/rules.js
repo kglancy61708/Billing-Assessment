@@ -475,12 +475,10 @@ async function rule7_soAddressMismatch() {
   if (rows.length === 0) {
     // Diagnostic: count all SalesOrd records to confirm query works
     try {
-      const allSOs = await suiteQLAll(`SELECT COUNT(*) AS cnt FROM transaction WHERE type = 'SalesOrd'`);
-      console.log(`Rule 7 diag: total SalesOrd count = ${JSON.stringify(allSOs[0])}`);
-      const withForm = await suiteQLAll(`SELECT COUNT(*) AS cnt FROM transaction WHERE type = 'SalesOrd' AND customform = '101'`);
-      console.log(`Rule 7 diag: SalesOrd with customform='101' = ${JSON.stringify(withForm[0])}`);
-      const noEnd = await suiteQLAll(`SELECT COUNT(*) AS cnt FROM transaction WHERE type = 'SalesOrd' AND customform = '101' AND enddate IS NULL`);
-      console.log(`Rule 7 diag: ...and enddate IS NULL = ${JSON.stringify(noEnd[0])}`);
+      const types = await suiteQLAll(`SELECT type, COUNT(*) AS cnt FROM transaction GROUP BY type ORDER BY cnt DESC`);
+      console.log(`Rule 7 diag: transaction types = ${JSON.stringify(types.slice(0,15))}`);
+      const forms = await suiteQLAll(`SELECT customform, COUNT(*) AS cnt FROM transaction WHERE type IN ('SalesOrd','SalesOrder','salesorder') GROUP BY customform ORDER BY cnt DESC`);
+      console.log(`Rule 7 diag: SO customforms = ${JSON.stringify(forms.slice(0,10))}`);
     } catch(e) { console.log(`Rule 7 diag failed: ${e.message}`); }
   }
   if (rows.length === 0) return [];
