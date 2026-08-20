@@ -736,6 +736,8 @@ async function submitSORecreate(cardId) {
     custbodycustom_del_location:   so.fields.custbodycustom_del_location,
     custbody123:                   document.getElementById(`${cardId}-f-custbody123`)?.value || '',
     otherrefnum:                   document.getElementById(`${cardId}-f-otherrefnum`)?.value || '',
+    department:                    so.fields.department,
+    class:                         so.fields.class,
   };
 
   try {
