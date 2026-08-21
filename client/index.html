@@ -654,6 +654,9 @@ function buildRecreateForm(cardId, so, custBilling, custShipping) {
       <td style="padding:4px 6px"><input type="number" step="any" class="edit-input" id="${cardId}-item-${idx}-qty" value="${item.quantity}" style="width:70px" /></td>
       <td style="padding:4px 6px"><input type="number" step="any" class="edit-input" id="${cardId}-item-${idx}-rate" value="${item.rate}" style="width:90px" /></td>
       <td style="padding:4px 6px"><input type="text" class="edit-input" id="${cardId}-item-${idx}-desc" value="${escHtml(item.description)}" style="width:160px" /></td>
+      <td style="padding:4px 6px;font-size:12px;color:#6b7280">${escHtml(item.department?.refName||'—')}</td>
+      <td style="padding:4px 6px;font-size:12px;color:#6b7280">${escHtml(item.class?.refName||'—')}</td>
+      <td style="padding:4px 6px;font-size:12px;color:#6b7280">${escHtml(item.location?.refName||'—')}</td>
     </tr>`).join('');
 
   return `
@@ -680,6 +683,9 @@ function buildRecreateForm(cardId, so, custBilling, custShipping) {
       <div class="edit-row"><label>Delivery Location</label><span style="font-size:13px;color:#374151">${escHtml(f.custbodycustom_del_location?.refName||'—')}</span></div>
       <div class="edit-row"><label>Customer PO</label><input type="text" class="edit-input" id="${cardId}-f-custbody123" value="${escHtml(f.custbody123)}" /></div>
       <div class="edit-row"><label>PO#</label><input type="text" class="edit-input" id="${cardId}-f-otherrefnum" value="${escHtml(f.otherrefnum)}" /></div>
+      <div class="edit-row"><label>Department</label><span style="font-size:13px;color:#374151">${escHtml(f.department?.refName||'—')}</span></div>
+      <div class="edit-row"><label>Product Line</label><span style="font-size:13px;color:#374151">${escHtml(f.class?.refName||'—')}</span></div>
+      <div class="edit-row"><label>Location</label><span style="font-size:13px;color:#374151">${escHtml(f.location?.refName||'—')}</span></div>
     </div>
     <div class="edit-section">
       <div class="edit-section-label">Line Items — verify before confirming</div>
@@ -689,6 +695,9 @@ function buildRecreateForm(cardId, so, custBilling, custShipping) {
           <th style="padding:4px 6px;text-align:left">Qty</th>
           <th style="padding:4px 6px;text-align:left">Rate</th>
           <th style="padding:4px 6px;text-align:left">Description</th>
+          <th style="padding:4px 6px;text-align:left">Department</th>
+          <th style="padding:4px 6px;text-align:left">Product Line</th>
+          <th style="padding:4px 6px;text-align:left">Location</th>
         </tr>
         ${itemRows}
       </table>
@@ -725,6 +734,9 @@ async function submitSORecreate(cardId) {
     quantity: document.getElementById(`${cardId}-item-${idx}-qty`)?.value ?? item.quantity,
     rate:     document.getElementById(`${cardId}-item-${idx}-rate`)?.value ?? item.rate,
     description: document.getElementById(`${cardId}-item-${idx}-desc`)?.value ?? item.description,
+    department: item.department,
+    class:      item.class,
+    location:   item.location,
   }));
 
   const fields = {

@@ -293,6 +293,9 @@ app.get('/api/salesorder/:id', async (req, res) => {
       rate: i.rate ?? 0,
       description: i.description || '',
       amount: i.amount ?? 0,
+      department: listField(i.department),
+      class: listField(i.class),
+      location: listField(i.location),
     }));
 
     res.json({
@@ -352,6 +355,9 @@ app.post('/api/salesorder/recreate', async (req, res) => {
           quantity: Number(i.quantity),
           rate: Number(i.rate),
           description: i.description || '',
+          ...(i.department?.id ? { department: { id: i.department.id } } : {}),
+          ...(i.class?.id ? { class: { id: i.class.id } } : {}),
+          ...(i.location?.id ? { location: { id: i.location.id } } : {}),
         })),
       },
     };
