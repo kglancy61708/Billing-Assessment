@@ -680,7 +680,7 @@ function buildRecreateForm(cardId, so, custBilling, custShipping) {
       <div class="edit-row"><label>No Fuel Surcharge</label><input type="checkbox" id="${cardId}-f-nofuel" ${f.custbody_no_fuel?'checked':''} /></div>
       <div class="edit-row"><label>Customer #</label><input type="text" class="edit-input" id="${cardId}-f-subcust" value="${escHtml(f.custbody_subcustomer_noparent)}" /></div>
       <div class="edit-row"><label>Order Type</label><span style="font-size:13px;color:#374151">${escHtml(f.custbody2?.refName||'—')}</span></div>
-      <div class="edit-row"><label>Delivery Location</label><span style="font-size:13px;color:#374151">${escHtml(f.custbodycustom_del_location?.refName||'—')}</span></div>
+      <div class="edit-row"><label>Delivery Location</label><span style="font-size:13px;color:#374151">${escHtml(f.custbodycustom_del_location||'—')}</span></div>
       <div class="edit-row"><label>Customer PO</label><input type="text" class="edit-input" id="${cardId}-f-custbody123" value="${escHtml(f.custbody123)}" /></div>
       <div class="edit-row"><label>PO#</label><input type="text" class="edit-input" id="${cardId}-f-otherrefnum" value="${escHtml(f.otherrefnum)}" /></div>
       <div class="edit-row"><label>Department</label><span style="font-size:13px;color:#374151">${escHtml(f.department?.refName||'—')}</span></div>
