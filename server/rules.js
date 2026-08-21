@@ -470,6 +470,12 @@ async function rule7_soAddressMismatch() {
   console.log(`Rule 7: active WM SOs = ${rows.length}`);
   if (rows.length === 0) return [];
 
+  // Temp: log status of known closed SO to find exact SuiteQL value
+  try {
+    const closedProbe = await suiteQLAll(`SELECT id, tranid, status FROM transaction WHERE type = 'SalesOrd' AND tranid = '042159' AND ROWNUM <= 1`);
+    console.log(`Rule 7 diag: SO 042159 status = ${JSON.stringify(closedProbe)}`);
+  } catch(e) { console.log(`Rule 7 diag: closed probe failed — ${e.message}`); }
+
   const norm = s => (s || '').trim().toLowerCase();
   const BILL_FIELDS = ['attention', 'addressee', 'addr1', 'city', 'state', 'zip'];
   const SHIP_FIELDS = ['addressee', 'addr1', 'city', 'state', 'zip'];
