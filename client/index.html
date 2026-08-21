@@ -873,7 +873,7 @@ function renderHeader() {
       </div>
       <div class="stat-row">
         <div><div class="stat-val" style="color:#ef4444">${s.open}</div><div class="stat-label">Open</div></div>
-        <div><div class="stat-val" style="color:#10b981">${s.reviewed}</div><div class="stat-label">Reviewed</div></div>
+        <div><div class="stat-val" style="color:#10b981">${s.reviewed}</div><div class="stat-label">Fixed</div></div>
         <div><div class="stat-val" style="color:#9ca3af">${s.dismissed}</div><div class="stat-label">Dismissed</div></div>
         <div><div class="stat-val" style="color:#6366f1">${s.total}</div><div class="stat-label">Total Flags</div></div>
       </div>
@@ -910,7 +910,7 @@ function renderToolbar() {
       <select class="select-filter" onchange="statusFilter=this.value;renderAll()">
         <option value="" ${statusFilter===''?'selected':''}>All Statuses</option>
         <option value="open" ${statusFilter==='open'?'selected':''}>Open</option>
-        <option value="reviewed" ${statusFilter==='reviewed'?'selected':''}>Reviewed</option>
+        <option value="reviewed" ${statusFilter==='reviewed'?'selected':''}>Fixed</option>
         <option value="dismissed" ${statusFilter==='dismissed'?'selected':''}>Dismissed</option>
       </select>
       <select class="select-filter" data-rule onchange="ruleFilter=this.value;renderAll()">
@@ -1080,7 +1080,7 @@ function renderFieldDetails(f) {
 }
 
 function renderCard(f) {
-  const ss = { open:'Open', reviewed:'Reviewed', dismissed:'Dismissed' };
+  const ss = { open:'Open', reviewed:'Fixed', dismissed:'Dismissed' };
   const sc = { open:'status-open', reviewed:'status-reviewed', dismissed:'status-dismissed' };
   const id = `card-${f.customerId}-${f.ruleId}`;
   return `
@@ -1122,7 +1122,7 @@ function renderCard(f) {
             <label for="${id}-ns-note" style="font-size:12px;color:#374151;cursor:pointer;font-weight:500">Add note to NetSuite customer record</label>
           </div>
           <div class="actions">
-            <button class="action-btn btn-reviewed" onclick="saveFlag('${f.customerId}',${f.ruleId},'reviewed','${id}',${f.parentId||'null'},'${(f.ruleLabel||'').replace(/'/g,"\\'")}')">Mark Reviewed</button>
+            <button class="action-btn btn-reviewed" onclick="saveFlag('${f.customerId}',${f.ruleId},'reviewed','${id}',${f.parentId||'null'},'${(f.ruleLabel||'').replace(/'/g,"\\'")}')">Mark Fixed</button>
             <button class="action-btn btn-dismiss"  onclick="saveFlag('${f.customerId}',${f.ruleId},'dismissed','${id}',${f.parentId||'null'},'${(f.ruleLabel||'').replace(/'/g,"\\'")}')">Dismiss</button>
             ${f.status!=='open'?`<button class="action-btn btn-reopen" onclick="saveFlag('${f.customerId}',${f.ruleId},'open','${id}',${f.parentId||'null'},'${(f.ruleLabel||'').replace(/'/g,"\\'")}')">Re-open</button>`:''}
             <span class="saved-toast" id="${id}-toast">Saved ✓</span>
