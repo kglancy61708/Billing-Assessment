@@ -324,17 +324,19 @@ async function listCustomersREST(limit = 3) {
 }
 
 // Post a note to a customer record in NetSuite via custom record type customrecord3018
-// custrecord3604 (Note Type list): Dismissed=1, Reviewed=2
-// custrecord3605 (Flag Type list): Rule 1=1, Rule 2=2, ... Rule 6=6
+// custrecord3604 (Note Type list): Dismissed=1, Fixed/Reviewed=2
+// custrecord3605 (Flag Type list): Rule 1=1, Rule 2=2, Rule 3=3, Rule 4=4, Rule 5=5, Rule 6=6, Rule 7=? (add to NS list)
+const RULE_FLAG_TYPE_ID = { 1:'1', 2:'2', 3:'3', 4:'4', 5:'5', 6:'6' }; // Rule 7 omitted until NS list entry added
 async function createCustomerNote(customerId, noteText, status, ruleId, reviewedBy, retries = 6) {
   const url = `${getBaseUrl()}/services/rest/record/v1/customrecord3018`;
   const noteTypeId = status === 'reviewed' ? '2' : '1';
+  const flagTypeId = RULE_FLAG_TYPE_ID[ruleId];
 
   const payload = {
     custrecord3601: { id: String(customerId) },   // customer link
     custrecord3602: reviewedBy || '',              // reviewer name (free text)
-    custrecord3604: { id: noteTypeId },            // note type (Dismissed/Reviewed)
-    custrecord3605: { id: String(ruleId) },        // flag type (rule 1-6)
+    custrecord3604: { id: noteTypeId },            // note type (Dismissed/Fixed)
+    ...(flagTypeId ? { custrecord3605: { id: flagTypeId } } : {}), // flag type — omitted if rule not yet in NS list
     custrecord3603: noteText,                      // note text
   };
 
