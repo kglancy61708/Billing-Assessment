@@ -282,7 +282,6 @@ app.get('/api/credentials', (req, res) => {
 app.get('/api/salesorder/:id', async (req, res) => {
   try {
     const so = await getSalesOrder(req.params.id);
-    console.log(`SO ${req.params.id} dept=${JSON.stringify(so.department)} class=${JSON.stringify(so.class)} location=${JSON.stringify(so.location)}`);
 
     const listField = f => f && f.id ? { id: String(f.id), refName: f.refName || '' } : null;
 
@@ -311,6 +310,7 @@ app.get('/api/salesorder/:id', async (req, res) => {
         otherrefnum: so.otherrefnum || '',
         department: listField(so.department),
         class: listField(so.class),
+        location: listField(so.location),
       },
       items,
     });
@@ -343,6 +343,7 @@ app.post('/api/salesorder/recreate', async (req, res) => {
       otherrefnum: fields.otherrefnum || '',
       ...(fields.department?.id ? { department: { id: fields.department.id } } : {}),
       ...(fields.class?.id ? { class: { id: fields.class.id } } : {}),
+      ...(fields.location?.id ? { location: { id: fields.location.id } } : {}),
       billingaddress,
       shippingaddress,
       item: {
