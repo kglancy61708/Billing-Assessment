@@ -1189,18 +1189,24 @@ async function saveFlag(customerId, ruleId, status, cardId, parentId, ruleLabel)
     if (toast) { toast.textContent = 'Saved ✓'; toast.classList.add('show'); }
 
     const nsToast = document.getElementById(cardId+'-ns-toast');
+    let nsError = false;
     if (nsToast && addToNetSuite) {
       if (result.netsuiteNoteError) {
+        nsError = true;
         nsToast.textContent = '⚠ NetSuite note failed: ' + result.netsuiteNoteError;
         nsToast.style.background = '#fef2f2';
         nsToast.style.color = '#b91c1c';
+        nsToast.style.whiteSpace = 'pre-wrap';
+        nsToast.style.maxHeight = '120px';
+        nsToast.style.overflowY = 'auto';
       } else {
         nsToast.textContent = 'Note added to NetSuite ✓';
       }
       nsToast.classList.add('show');
     }
 
-    setTimeout(() => renderAll(), 1200);
+    // Don't re-render if there's a NS error — that would wipe the error message before the user reads it
+    if (!nsError) setTimeout(() => renderAll(), 1200);
   } catch(err) {
     alert('Failed to save: ' + err.message);
   }
