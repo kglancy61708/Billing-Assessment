@@ -444,11 +444,11 @@ async function rule7_soAddressMismatch() {
   const rows = await suiteQLAll(`
     SELECT t.id AS soid, t.tranid, t.entity,
            c.companyname, c.category,
-           ab.addressee AS c_bill_addressee, ab.addr1 AS c_bill_addr1,
+           ab.attention AS c_bill_attention, ab.addressee AS c_bill_addressee, ab.addr1 AS c_bill_addr1,
            ab.city AS c_bill_city, ab.state AS c_bill_state, ab.zip AS c_bill_zip,
            sb.addressee AS c_ship_addressee, sb.addr1 AS c_ship_addr1,
            sb.city AS c_ship_city, sb.state AS c_ship_state, sb.zip AS c_ship_zip,
-           ba.addressee AS so_bill_addressee, ba.addr1 AS so_bill_addr1,
+           ba.attention AS so_bill_attention, ba.addressee AS so_bill_addressee, ba.addr1 AS so_bill_addr1,
            ba.city AS so_bill_city, ba.state AS so_bill_state, ba.zip AS so_bill_zip,
            sa.addressee AS so_ship_addressee, sa.addr1 AS so_ship_addr1,
            sa.city AS so_ship_city, sa.state AS so_ship_state, sa.zip AS so_ship_zip
@@ -470,24 +470,25 @@ async function rule7_soAddressMismatch() {
   if (rows.length === 0) return [];
 
   const norm = s => (s || '').trim().toLowerCase();
-  const ADDR_FIELDS = ['addressee', 'addr1', 'city', 'state', 'zip'];
+  const BILL_FIELDS = ['attention', 'addressee', 'addr1', 'city', 'state', 'zip'];
+  const SHIP_FIELDS = ['addressee', 'addr1', 'city', 'state', 'zip'];
 
-  function mismatchedFields(soAddr, custAddr) {
-    if (!soAddr || ADDR_FIELDS.every(f => !soAddr[f])) return [];
-    return ADDR_FIELDS.filter(f => norm(soAddr[f]) !== norm(custAddr[f]));
+  function mismatchedFields(soAddr, custAddr, fields) {
+    if (!soAddr || fields.every(f => !soAddr[f])) return [];
+    return fields.filter(f => norm(soAddr[f]) !== norm(custAddr[f]));
   }
 
   const flags = [];
 
   for (const r of rows) {
     const sid = String(r.soid);
-    const custBill = { addressee: r.c_bill_addressee, addr1: r.c_bill_addr1, city: r.c_bill_city, state: r.c_bill_state, zip: r.c_bill_zip };
+    const custBill = { attention: r.c_bill_attention, addressee: r.c_bill_addressee, addr1: r.c_bill_addr1, city: r.c_bill_city, state: r.c_bill_state, zip: r.c_bill_zip };
     const custShip = { addressee: r.c_ship_addressee, addr1: r.c_ship_addr1, city: r.c_ship_city, state: r.c_ship_state, zip: r.c_ship_zip };
-    const soBill   = { addressee: r.so_bill_addressee, addr1: r.so_bill_addr1, city: r.so_bill_city, state: r.so_bill_state, zip: r.so_bill_zip };
+    const soBill   = { attention: r.so_bill_attention, addressee: r.so_bill_addressee, addr1: r.so_bill_addr1, city: r.so_bill_city, state: r.so_bill_state, zip: r.so_bill_zip };
     const soShip   = { addressee: r.so_ship_addressee, addr1: r.so_ship_addr1, city: r.so_ship_city, state: r.so_ship_state, zip: r.so_ship_zip };
 
-    const billDiffs = mismatchedFields(soBill, custBill);
-    const shipDiffs = mismatchedFields(soShip, custShip);
+    const billDiffs = mismatchedFields(soBill, custBill, BILL_FIELDS);
+    const shipDiffs = mismatchedFields(soShip, custShip, SHIP_FIELDS);
 
     if (billDiffs.length === 0 && shipDiffs.length === 0) continue;
 

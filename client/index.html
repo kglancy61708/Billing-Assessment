@@ -641,7 +641,8 @@ async function loadSOForRecreate(soId, customerId, cardId, custBilling, custShip
 
 function buildRecreateForm(cardId, so, custBilling, custShipping) {
   const f = so.fields;
-  const addrInputs = (prefix, addr) => `
+  const addrInputs = (prefix, addr, showAttention = false) => `
+    ${showAttention ? `<div class="edit-row"><label>Attention</label><input type="text" class="edit-input" id="${prefix}-attention" value="${escHtml(addr.attention||'')}" /></div>` : ''}
     <div class="edit-row"><label>Addressee</label><input type="text" class="edit-input" id="${prefix}-addressee" value="${escHtml(addr.addressee||'')}" /></div>
     <div class="edit-row"><label>Address 1</label><input type="text" class="edit-input" id="${prefix}-addr1" value="${escHtml(addr.addr1||'')}" /></div>
     <div class="edit-row"><label>City</label><input type="text" class="edit-input" id="${prefix}-city" value="${escHtml(addr.city||'')}" /></div>
@@ -667,7 +668,7 @@ function buildRecreateForm(cardId, so, custBilling, custShipping) {
     </div>
     <div class="edit-section">
       <div class="edit-section-label">Billing Address (pre-filled from customer)</div>
-      ${addrInputs(`${cardId}-bill`, custBilling)}
+      ${addrInputs(`${cardId}-bill`, custBilling, true)}
     </div>
     <div class="edit-section">
       <div class="edit-section-label">Shipping Address (pre-filled from customer)</div>
@@ -721,7 +722,8 @@ async function submitSORecreate(cardId) {
   }
   const enddate = document.getElementById(`${cardId}-new-enddate`)?.value || null;
 
-  const getAddr = prefix => ({
+  const getAddr = (prefix, includeAttention = false) => ({
+    ...(includeAttention ? { attention: document.getElementById(`${prefix}-attention`)?.value || '' } : {}),
     addressee: document.getElementById(`${prefix}-addressee`)?.value || '',
     addr1:     document.getElementById(`${prefix}-addr1`)?.value     || '',
     city:      document.getElementById(`${prefix}-city`)?.value      || '',
@@ -762,7 +764,7 @@ async function submitSORecreate(cardId) {
         customerId,
         startdate,
         enddate,
-        billingaddress:  getAddr(`${cardId}-bill`),
+        billingaddress:  getAddr(`${cardId}-bill`, true),
         shippingaddress: getAddr(`${cardId}-ship`),
         fields,
         items,
@@ -1047,7 +1049,7 @@ function renderFieldDetails(f) {
       </tr>`;
     };
     const sections = [];
-    const ADDR_LABELS = { addressee:'Addressee', addr1:'Address 1', city:'City', state:'State', zip:'Zip' };
+    const ADDR_LABELS = { attention:'Attention', addressee:'Addressee', addr1:'Address 1', city:'City', state:'State', zip:'Zip' };
     for (const type of ['billing','shipping']) {
       const side = fields[type];
       if (!side || !side.mismatch) continue;
