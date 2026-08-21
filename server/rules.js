@@ -474,7 +474,10 @@ async function rule7_soAddressMismatch() {
   const SHIP_FIELDS = ['addressee', 'addr1', 'city', 'state', 'zip'];
 
   function mismatchedFields(soAddr, custAddr, fields) {
-    if (!soAddr || fields.every(f => !soAddr[f])) return [];
+    const soBlank   = !soAddr   || fields.every(f => !soAddr[f]);
+    const custBlank = !custAddr || fields.every(f => !custAddr[f]);
+    if (soBlank && custBlank) return [];          // neither side has an address — nothing to compare
+    if (soBlank) return fields.filter(f => !!norm(custAddr[f])); // SO missing, customer has one — all populated customer fields are mismatches
     return fields.filter(f => norm(soAddr[f]) !== norm(custAddr[f]));
   }
 
