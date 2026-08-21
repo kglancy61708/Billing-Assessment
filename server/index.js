@@ -331,9 +331,12 @@ app.post('/api/salesorder/recreate', async (req, res) => {
       return res.status(400).json({ error: 'oldSoId, customerId, and startdate are required' });
     }
 
+    console.log(`recreate: custbodycustom_del_location=${JSON.stringify(fields.custbodycustom_del_location)}`);
+
     const payload = {
       entity: { id: String(customerId) },
       customform: { id: '101' },
+      trandate: startdate,
       startdate,
       ...(enddate ? { enddate } : {}),
       memo: fields.memo || '',
