@@ -448,6 +448,7 @@ async function rule7_soAddressMismatch() {
            ab.city AS c_bill_city, ab.state AS c_bill_state, ab.zip AS c_bill_zip,
            sb.addressee AS c_ship_addressee, sb.addr1 AS c_ship_addr1,
            sb.city AS c_ship_city, sb.state AS c_ship_state, sb.zip AS c_ship_zip,
+           t.billingaddress AS so_bill_id, t.shippingaddress AS so_ship_id,
            ba.attention AS so_bill_attention, ba.addressee AS so_bill_addressee, ba.addr1 AS so_bill_addr1,
            ba.city AS so_bill_city, ba.state AS so_bill_state, ba.zip AS so_bill_zip,
            sa.addressee AS so_ship_addressee, sa.addr1 AS so_ship_addr1,
@@ -473,10 +474,12 @@ async function rule7_soAddressMismatch() {
   const BILL_FIELDS = ['attention', 'addressee', 'addr1', 'city', 'state', 'zip'];
   const SHIP_FIELDS = ['addressee', 'addr1', 'city', 'state', 'zip'];
 
-  function mismatchedFields(soAddr, custAddr, fields) {
+  function mismatchedFields(soAddr, custAddr, fields, soHasAddress) {
     const soBlank   = !soAddr   || fields.every(f => !soAddr[f]);
     const custBlank = !custAddr || fields.every(f => !custAddr[f]);
-    if (soBlank && custBlank) return fields;      // both sides missing an address — flag everything
+    // SO has an address stamped but the JOIN couldn't read its fields (freeform override, etc.) — skip
+    if (soBlank && soHasAddress) return [];
+    if (soBlank && custBlank) return fields;      // both sides truly missing — flag everything
     if (soBlank) return fields.filter(f => !!norm(custAddr[f]));
     return fields.filter(f => norm(soAddr[f]) !== norm(custAddr[f]));
   }
@@ -490,8 +493,8 @@ async function rule7_soAddressMismatch() {
     const soBill   = { attention: r.so_bill_attention, addressee: r.so_bill_addressee, addr1: r.so_bill_addr1, city: r.so_bill_city, state: r.so_bill_state, zip: r.so_bill_zip };
     const soShip   = { addressee: r.so_ship_addressee, addr1: r.so_ship_addr1, city: r.so_ship_city, state: r.so_ship_state, zip: r.so_ship_zip };
 
-    const billDiffs = mismatchedFields(soBill, custBill, BILL_FIELDS);
-    const shipDiffs = mismatchedFields(soShip, custShip, SHIP_FIELDS);
+    const billDiffs = mismatchedFields(soBill, custBill, BILL_FIELDS, !!r.so_bill_id);
+    const shipDiffs = mismatchedFields(soShip, custShip, SHIP_FIELDS, !!r.so_ship_id);
 
     if (billDiffs.length === 0 && shipDiffs.length === 0) continue;
 
