@@ -38,9 +38,16 @@ async function runScan() {
     const finishedAt = new Date().toISOString();
     saveScanRun({ startedAt, finishedAt, flagCount: flags.length, errorCount: errors.length, errors });
 
-    // Notify Slack for flags that weren't in the previous review map (genuinely new)
+    // Notify Slack for flags that are new since the last scan and not already dismissed/fixed
+    const prevKeys = new Set((cachedResult?.flags || []).map(f => `${f.customerId}:${f.ruleId}`));
     const reviewMap = getReviewMap();
-    const newFlags = flags.filter(f => !reviewMap[`${f.customerId}:${f.ruleId}`]);
+    const newFlags = flags.filter(f => {
+      const key = `${f.customerId}:${f.ruleId}`;
+      if (prevKeys.has(key)) return false;                                      // already flagged last scan
+      const review = reviewMap[key];
+      if (review?.status === 'reviewed' || review?.status === 'dismissed') return false; // already handled
+      return true;
+    });
     postNewFlags(newFlags).catch(e => console.error('Slack notify error:', e.message));
 
     cachedResult = { flags, errors, scannedAt: finishedAt };
