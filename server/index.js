@@ -14,6 +14,7 @@ const {
   saveScanRun,
   getRecentScans,
 } = require('./db');
+const { postNewFlags } = require('./slack');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -36,6 +37,12 @@ async function runScan() {
     const { flags, errors } = await runAllRules();
     const finishedAt = new Date().toISOString();
     saveScanRun({ startedAt, finishedAt, flagCount: flags.length, errorCount: errors.length, errors });
+
+    // Notify Slack for flags that weren't in the previous review map (genuinely new)
+    const reviewMap = getReviewMap();
+    const newFlags = flags.filter(f => !reviewMap[`${f.customerId}:${f.ruleId}`]);
+    postNewFlags(newFlags).catch(e => console.error('Slack notify error:', e.message));
+
     cachedResult = { flags, errors, scannedAt: finishedAt };
     return cachedResult;
   } finally {
